@@ -211,6 +211,18 @@ impl Default for DiagnosticsConfig {
     }
 }
 
+#[derive(Clone, Default, Serialize, Deserialize)]
+struct ColorsConfig {
+    // This will be populated with actual color fields later
+    // For now, it's just a placeholder
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+struct HighlightsConfig {
+    // This will be populated with actual highlight fields later
+    // For now, it's just a placeholder
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 struct OneDarkConfig {
     #[serde(with = "style_string_serializer", default = "default_style")]
@@ -247,10 +259,10 @@ struct OneDarkConfig {
     lualine: LualineConfig,
 
     #[serde(default)]
-    colors: Dictionary,
+    colors: ColorsConfig,
 
     #[serde(default)]
-    highlights: Dictionary,
+    highlights: HighlightsConfig,
 
     #[serde(default)]
     diagnostics: DiagnosticsConfig,
@@ -286,8 +298,8 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
         loaded: default_true(),
         code_style: Default::default(),
         lualine: Default::default(),
-        colors: Dictionary::new(),
-        highlights: Dictionary::new(),
+        colors: Default::default(),
+        highlights: Default::default(),
         diagnostics: Default::default(),
     };
 
@@ -424,17 +436,9 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
                 lualine: partial_config.lualine,
                 diagnostics: partial_config.diagnostics,
 
-                // For dictionaries, only replace if not empty
-                colors: if !partial_config.colors.is_empty() {
-                    partial_config.colors
-                } else {
-                    current_config.colors
-                },
-                highlights: if !partial_config.highlights.is_empty() {
-                    partial_config.highlights
-                } else {
-                    current_config.highlights
-                },
+                // For the new struct types, use the provided ones
+                colors: partial_config.colors,
+                highlights: partial_config.highlights,
             };
 
             // Save the merged config
