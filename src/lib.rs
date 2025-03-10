@@ -1,13 +1,13 @@
 use nvim_oxi::{
-    api::{self, opts::*, types::*},
     Dictionary, Function, Object,
+    api::{self, opts::*, types::*},
 };
 
 mod highlights;
 mod terminal;
 
 #[nvim_oxi::plugin]
-fn onedark() -> nvim_oxi::Result<Dictionary> {
+fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
     // Define styles list
     let styles_list = vec![
         "dark".to_string(),
@@ -37,7 +37,8 @@ fn onedark() -> nvim_oxi::Result<Dictionary> {
                 ("functions", "none".into()),
                 ("strings", "none".into()),
                 ("variables", "none".into()),
-            ]).into(),
+            ])
+            .into(),
         ),
         (
             "lualine",
@@ -51,13 +52,14 @@ fn onedark() -> nvim_oxi::Result<Dictionary> {
                 ("darker", true.into()),
                 ("undercurl", true.into()),
                 ("background", true.into()),
-            ]).into(),
+            ])
+            .into(),
         ),
     ]);
 
     // Initialize global config if not already set
     let g_onedark_config = api::get_var::<Option<Dictionary>>("onedark_config").unwrap_or(None);
-    
+
     if g_onedark_config.is_none() {
         api::set_var("onedark_config", default_config.clone())?;
     } else {
@@ -77,23 +79,23 @@ fn onedark() -> nvim_oxi::Result<Dictionary> {
         if api::eval::<bool>("exists('syntax_on')")? {
             api::command("syntax reset")?;
         }
-        
+
         api::set_option_value("termguicolors", true, &Default::default())?;
         api::set_var("colors_name", "onedark")?;
-        
+
         let background = api::get_option_value::<String>("background", &Default::default())?;
         let config = api::get_var::<Dictionary>("onedark_config")?;
-        
+
         if background == "light" {
             set_option("style", "light".into())?;
         } else if config.get::<String>("style")? == "light" {
             set_option("style", "light".into())?;
         }
-        
+
         // Call setup functions from other modules
         highlights::setup()?;
         terminal::setup()?;
-        
+
         Ok(())
     });
 
@@ -102,28 +104,32 @@ fn onedark() -> nvim_oxi::Result<Dictionary> {
         let mut config = api::get_var::<Dictionary>("onedark_config")?;
         let index = config.get::<i64>("toggle_style_index")? + 1;
         let toggle_style_list = config.get::<Vec<String>>("toggle_style_list")?;
-        
-        let new_index = if index as usize > toggle_style_list.len() { 1 } else { index };
+
+        let new_index = if index as usize > toggle_style_list.len() {
+            1
+        } else {
+            index
+        };
         let new_style = &toggle_style_list[new_index as usize - 1];
-        
+
         set_option("style", new_style.clone().into())?;
         set_option("toggle_style_index", new_index.into())?;
-        
+
         if new_style == "light" {
             api::set_option_value("background", "light", &Default::default())?;
         } else {
             api::set_option_value("background", "dark", &Default::default())?;
         }
-        
+
         api::command("colorscheme onedark")?;
-        
+
         Ok(())
     });
 
     // Create setup function
     let setup = Function::from_fn(|opts: Option<Dictionary>| -> nvim_oxi::Result<()> {
         let mut config = api::get_var::<Dictionary>("onedark_config")?;
-        
+
         if let Some(opts) = opts {
             // Merge options
             for (key, value) in opts.iter() {
@@ -134,7 +140,7 @@ fn onedark() -> nvim_oxi::Result<Dictionary> {
                     // Deep merge for nested dictionaries
                     if let (Ok(mut existing), Ok(new)) = (
                         config.get::<Dictionary>(key),
-                        value.clone().try_into::<Dictionary>()
+                        value.clone().try_into::<Dictionary>(),
                     ) {
                         for (sub_key, sub_value) in new.iter() {
                             existing.insert(sub_key.clone(), sub_value.clone());
@@ -145,18 +151,15 @@ fn onedark() -> nvim_oxi::Result<Dictionary> {
                     config.insert(key.clone(), value.clone());
                 }
             }
-            
+
             api::set_var("onedark_config", config.clone())?;
         }
-        
+
         // Set up toggle key if configured
         if let Ok(toggle_key) = config.get::<String>("toggle_style_key") {
             if !toggle_key.is_empty() {
-                let opts = SetKeymapOpts::builder()
-                    .noremap(true)
-                    .silent(true)
-                    .build();
-                
+                let opts = SetKeymapOpts::builder().noremap(true).silent(true).build();
+
                 api::set_keymap(
                     Mode::Normal,
                     &toggle_key,
@@ -165,7 +168,7 @@ fn onedark() -> nvim_oxi::Result<Dictionary> {
                 )?;
             }
         }
-        
+
         Ok(())
     });
 
