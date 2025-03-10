@@ -84,14 +84,6 @@ fn default_true() -> bool {
     true
 }
 
-fn default_comments_style() -> String {
-    "italic".to_string()
-}
-
-fn default_none_style() -> String {
-    "none".to_string()
-}
-
 // Function to get global config or return None if it doesn't exist
 fn get_global_config() -> Option<Dictionary> {
     match api::get_var::<Option<Dictionary>>("onedark_config").unwrap_or(None) {
@@ -332,32 +324,75 @@ mod style_vec_serializer {
 
 #[derive(Clone, Serialize, Deserialize)]
 struct CodeStyle {
-    #[serde(default = "default_comments_style")]
+    #[serde(default = "get_comments_style_from_global")]
     comments: String,
 
-    #[serde(default = "default_none_style")]
+    #[serde(default = "get_keywords_style_from_global")]
     keywords: String,
 
-    #[serde(default = "default_none_style")]
+    #[serde(default = "get_functions_style_from_global")]
     functions: String,
 
-    #[serde(default = "default_none_style")]
+    #[serde(default = "get_strings_style_from_global")]
     strings: String,
 
-    #[serde(default = "default_none_style")]
+    #[serde(default = "get_variables_style_from_global")]
     variables: String,
 }
 
-impl Default for CodeStyle {
-    fn default() -> Self {
-        Self {
-            comments: default_comments_style(),
-            keywords: default_none_style(),
-            functions: default_none_style(),
-            strings: default_none_style(),
-            variables: default_none_style(),
+fn get_comments_style_from_global() -> String {
+    if let Some(config) = get_global_config() {
+        if let Ok(code_style) = config.get::<Dictionary>("code_style") {
+            if let Ok(comments) = code_style.get::<String>("comments") {
+                return comments;
+            }
         }
     }
+    "italic".into()
+}
+
+fn get_keywords_style_from_global() -> String {
+    if let Some(config) = get_global_config() {
+        if let Ok(code_style) = config.get::<Dictionary>("code_style") {
+            if let Ok(keywords) = code_style.get::<String>("keywords") {
+                return keywords;
+            }
+        }
+    }
+    "none".into()
+}
+
+fn get_functions_style_from_global() -> String {
+    if let Some(config) = get_global_config() {
+        if let Ok(code_style) = config.get::<Dictionary>("code_style") {
+            if let Ok(functions) = code_style.get::<String>("functions") {
+                return functions;
+            }
+        }
+    }
+    "none".into()
+}
+
+fn get_strings_style_from_global() -> String {
+    if let Some(config) = get_global_config() {
+        if let Ok(code_style) = config.get::<Dictionary>("code_style") {
+            if let Ok(strings) = code_style.get::<String>("strings") {
+                return strings;
+            }
+        }
+    }
+    "none".into()
+}
+
+fn get_variables_style_from_global() -> String {
+    if let Some(config) = get_global_config() {
+        if let Ok(code_style) = config.get::<Dictionary>("code_style") {
+            if let Ok(variables) = code_style.get::<String>("variables") {
+                return variables;
+            }
+        }
+    }
+    "none".into()
 }
 
 #[derive(Clone, Serialize, Deserialize)]
