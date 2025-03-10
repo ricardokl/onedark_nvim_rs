@@ -34,7 +34,7 @@ impl OneDarkStyle {
             OneDarkStyle::Light => "light",
         }
     }
-    
+
     // Get all available styles as a vector
     fn all_styles() -> Vec<OneDarkStyle> {
         vec![
@@ -47,7 +47,7 @@ impl OneDarkStyle {
             OneDarkStyle::Light,
         ]
     }
-    
+
     // Get all styles as strings
     fn all_styles_as_strings() -> Vec<String> {
         Self::all_styles()
@@ -55,7 +55,7 @@ impl OneDarkStyle {
             .map(|s| s.as_str().to_string())
             .collect()
     }
-    
+
     // Parse from string
     fn from_str(s: &str) -> Result<Self, String> {
         match s.to_lowercase().as_str() {
@@ -74,8 +74,8 @@ impl OneDarkStyle {
 // Serializer modules to handle string conversion for Neovim compatibility
 mod style_string_serializer {
     use super::OneDarkStyle;
-    use serde::{Deserialize, Deserializer, Serializer};
     use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(style: &OneDarkStyle, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -95,9 +95,9 @@ mod style_string_serializer {
 
 mod style_vec_serializer {
     use super::OneDarkStyle;
-    use serde::{Deserialize, Deserializer, Serializer};
     use serde::de::Error;
     use serde::ser::SerializeSeq;
+    use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(styles: &[OneDarkStyle], serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -116,12 +116,12 @@ mod style_vec_serializer {
     {
         let strings = Vec::<String>::deserialize(deserializer)?;
         let mut styles = Vec::with_capacity(strings.len());
-        
+
         for s in strings {
             let style = OneDarkStyle::from_str(&s).map_err(D::Error::custom)?;
             styles.push(style);
         }
-        
+
         Ok(styles)
     }
 }
@@ -202,9 +202,7 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
             strings: "none".to_string(),
             variables: "none".to_string(),
         },
-        lualine: LualineConfig {
-            transparent: false,
-        },
+        lualine: LualineConfig { transparent: false },
         colors: Dictionary::new(),
         highlights: Dictionary::new(),
         diagnostics: DiagnosticsConfig {
