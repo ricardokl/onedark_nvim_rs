@@ -92,6 +92,189 @@ fn default_none_style() -> String {
     "none".to_string()
 }
 
+// Function to get global config or return None if it doesn't exist
+fn get_global_config() -> Option<Dictionary> {
+    match api::get_var::<Option<Dictionary>>("onedark_config").unwrap_or(None) {
+        Some(dict) => Some(dict),
+        None => None,
+    }
+}
+
+// Functions to extract default values from the global config
+fn get_style_from_global() -> OneDarkStyle {
+    if let Some(config) = get_global_config() {
+        if let Ok(style_str) = config.get::<String>("style") {
+            if let Ok(style) = OneDarkStyle::from_str(&style_str) {
+                return style;
+            }
+        }
+    }
+    default_style()
+}
+
+fn get_toggle_style_list_from_global() -> Vec<OneDarkStyle> {
+    if let Some(config) = get_global_config() {
+        if let Ok(styles) = config.get::<Vec<String>>("toggle_style_list") {
+            let mut result = Vec::new();
+            for style_str in styles {
+                if let Ok(style) = OneDarkStyle::from_str(&style_str) {
+                    result.push(style);
+                }
+            }
+            if !result.is_empty() {
+                return result;
+            }
+        }
+    }
+    default_toggle_style_list()
+}
+
+fn get_toggle_style_index_from_global() -> i64 {
+    if let Some(config) = get_global_config() {
+        if let Ok(index) = config.get::<i64>("toggle_style_index") {
+            return index;
+        }
+    }
+    0
+}
+
+fn get_toggle_style_key_from_global() -> Option<String> {
+    if let Some(config) = get_global_config() {
+        if let Ok(key) = config.get::<String>("toggle_style_key") {
+            return Some(key);
+        }
+    }
+    None
+}
+
+fn get_transparent_from_global() -> bool {
+    if let Some(config) = get_global_config() {
+        if let Ok(transparent) = config.get::<bool>("transparent") {
+            return transparent;
+        }
+    }
+    false
+}
+
+fn get_term_colors_from_global() -> bool {
+    if let Some(config) = get_global_config() {
+        if let Ok(term_colors) = config.get::<bool>("term_colors") {
+            return term_colors;
+        }
+    }
+    default_true()
+}
+
+fn get_ending_tildes_from_global() -> bool {
+    if let Some(config) = get_global_config() {
+        if let Ok(ending_tildes) = config.get::<bool>("ending_tildes") {
+            return ending_tildes;
+        }
+    }
+    false
+}
+
+fn get_cmp_itemkind_reverse_from_global() -> bool {
+    if let Some(config) = get_global_config() {
+        if let Ok(cmp_itemkind_reverse) = config.get::<bool>("cmp_itemkind_reverse") {
+            return cmp_itemkind_reverse;
+        }
+    }
+    false
+}
+
+fn get_loaded_from_global() -> bool {
+    if let Some(config) = get_global_config() {
+        if let Ok(loaded) = config.get::<bool>("loaded") {
+            return loaded;
+        }
+    }
+    default_true()
+}
+
+fn get_code_style_from_global() -> CodeStyle {
+    if let Some(config) = get_global_config() {
+        if let Ok(code_style_dict) = config.get::<Dictionary>("code_style") {
+            let mut code_style = CodeStyle::default();
+            
+            if let Ok(comments) = code_style_dict.get::<String>("comments") {
+                code_style.comments = comments;
+            }
+            if let Ok(keywords) = code_style_dict.get::<String>("keywords") {
+                code_style.keywords = keywords;
+            }
+            if let Ok(functions) = code_style_dict.get::<String>("functions") {
+                code_style.functions = functions;
+            }
+            if let Ok(strings) = code_style_dict.get::<String>("strings") {
+                code_style.strings = strings;
+            }
+            if let Ok(variables) = code_style_dict.get::<String>("variables") {
+                code_style.variables = variables;
+            }
+            
+            return code_style;
+        }
+    }
+    CodeStyle::default()
+}
+
+fn get_lualine_from_global() -> LualineConfig {
+    if let Some(config) = get_global_config() {
+        if let Ok(lualine_dict) = config.get::<Dictionary>("lualine") {
+            let mut lualine = LualineConfig::default();
+            
+            if let Ok(transparent) = lualine_dict.get::<bool>("transparent") {
+                lualine.transparent = transparent;
+            }
+            
+            return lualine;
+        }
+    }
+    LualineConfig::default()
+}
+
+fn get_diagnostics_from_global() -> DiagnosticsConfig {
+    if let Some(config) = get_global_config() {
+        if let Ok(diagnostics_dict) = config.get::<Dictionary>("diagnostics") {
+            let mut diagnostics = DiagnosticsConfig::default();
+            
+            if let Ok(darker) = diagnostics_dict.get::<bool>("darker") {
+                diagnostics.darker = darker;
+            }
+            if let Ok(undercurl) = diagnostics_dict.get::<bool>("undercurl") {
+                diagnostics.undercurl = undercurl;
+            }
+            if let Ok(background) = diagnostics_dict.get::<bool>("background") {
+                diagnostics.background = background;
+            }
+            
+            return diagnostics;
+        }
+    }
+    DiagnosticsConfig::default()
+}
+
+fn get_colors_from_global() -> ColorsConfig {
+    if let Some(config) = get_global_config() {
+        if let Ok(_colors_dict) = config.get::<Dictionary>("colors") {
+            // When ColorsConfig has actual fields, extract them here
+            // For now, just return default
+        }
+    }
+    ColorsConfig::default()
+}
+
+fn get_highlights_from_global() -> HighlightsConfig {
+    if let Some(config) = get_global_config() {
+        if let Ok(_highlights_dict) = config.get::<Dictionary>("highlights") {
+            // When HighlightsConfig has actual fields, extract them here
+            // For now, just return default
+        }
+    }
+    HighlightsConfig::default()
+}
+
 // Serializer modules to handle string conversion for Neovim compatibility
 mod style_string_serializer {
     use super::OneDarkStyle;
@@ -225,46 +408,46 @@ struct HighlightsConfig {
 
 #[derive(Clone, Serialize, Deserialize)]
 struct OneDarkConfig {
-    #[serde(with = "style_string_serializer", default = "default_style")]
+    #[serde(with = "style_string_serializer", default = "get_style_from_global")]
     style: OneDarkStyle,
 
-    #[serde(with = "style_vec_serializer", default = "default_toggle_style_list")]
+    #[serde(with = "style_vec_serializer", default = "get_toggle_style_list_from_global")]
     toggle_style_list: Vec<OneDarkStyle>,
 
-    #[serde(default)]
+    #[serde(default = "get_toggle_style_index_from_global")]
     toggle_style_index: i64,
 
-    #[serde(default)]
+    #[serde(default = "get_toggle_style_key_from_global")]
     toggle_style_key: Option<String>,
 
-    #[serde(default)]
+    #[serde(default = "get_transparent_from_global")]
     transparent: bool,
 
-    #[serde(default = "default_true")]
+    #[serde(default = "get_term_colors_from_global")]
     term_colors: bool,
 
-    #[serde(default)]
+    #[serde(default = "get_ending_tildes_from_global")]
     ending_tildes: bool,
 
-    #[serde(default)]
+    #[serde(default = "get_cmp_itemkind_reverse_from_global")]
     cmp_itemkind_reverse: bool,
 
-    #[serde(default = "default_true")]
+    #[serde(default = "get_loaded_from_global")]
     loaded: bool,
 
-    #[serde(default)]
+    #[serde(default = "get_code_style_from_global")]
     code_style: CodeStyle,
 
-    #[serde(default)]
+    #[serde(default = "get_lualine_from_global")]
     lualine: LualineConfig,
 
-    #[serde(default)]
+    #[serde(default = "get_colors_from_global")]
     colors: ColorsConfig,
 
-    #[serde(default)]
+    #[serde(default = "get_highlights_from_global")]
     highlights: HighlightsConfig,
 
-    #[serde(default)]
+    #[serde(default = "get_diagnostics_from_global")]
     diagnostics: DiagnosticsConfig,
 }
 
@@ -287,20 +470,20 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
 
     // Set up default config
     let default_config = OneDarkConfig {
-        style: default_style(),
-        toggle_style_list: default_toggle_style_list(),
-        toggle_style_index: 0,
-        toggle_style_key: None,
-        transparent: false,
-        term_colors: default_true(),
-        ending_tildes: false,
-        cmp_itemkind_reverse: false,
-        loaded: default_true(),
-        code_style: Default::default(),
-        lualine: Default::default(),
-        colors: Default::default(),
-        highlights: Default::default(),
-        diagnostics: Default::default(),
+        style: get_style_from_global(),
+        toggle_style_list: get_toggle_style_list_from_global(),
+        toggle_style_index: get_toggle_style_index_from_global(),
+        toggle_style_key: get_toggle_style_key_from_global(),
+        transparent: get_transparent_from_global(),
+        term_colors: get_term_colors_from_global(),
+        ending_tildes: get_ending_tildes_from_global(),
+        cmp_itemkind_reverse: get_cmp_itemkind_reverse_from_global(),
+        loaded: get_loaded_from_global(),
+        code_style: get_code_style_from_global(),
+        lualine: get_lualine_from_global(),
+        colors: get_colors_from_global(),
+        highlights: get_highlights_from_global(),
+        diagnostics: get_diagnostics_from_global(),
     };
 
     // Convert to Dictionary for Neovim API
