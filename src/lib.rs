@@ -387,7 +387,7 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
     let setup = Function::from_fn(|opts: Option<OneDarkConfig>| -> nvim_oxi::Result<()> {
         // Get current config
         let current_config = get_config()?;
-        
+
         // If options were provided, merge them with current config
         if let Some(partial_config) = opts {
             // Create a merged config - start with current and override with provided values
@@ -398,28 +398,32 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
                 } else {
                     current_config.style
                 },
-                
+
                 // Only override toggle_style_list if it's not the default
-                toggle_style_list: if partial_config.toggle_style_list != default_toggle_style_list() {
+                toggle_style_list: if partial_config.toggle_style_list
+                    != default_toggle_style_list()
+                {
                     partial_config.toggle_style_list
                 } else {
                     current_config.toggle_style_list
                 },
-                
+
                 // For other fields, prefer the partial config value if provided
                 toggle_style_index: current_config.toggle_style_index,
-                toggle_style_key: partial_config.toggle_style_key.or(current_config.toggle_style_key),
+                toggle_style_key: partial_config
+                    .toggle_style_key
+                    .or(current_config.toggle_style_key),
                 transparent: partial_config.transparent,
                 term_colors: partial_config.term_colors,
                 ending_tildes: partial_config.ending_tildes,
                 cmp_itemkind_reverse: partial_config.cmp_itemkind_reverse,
                 loaded: current_config.loaded, // Keep the loaded status
-                
+
                 // For nested structures, use the provided ones
                 code_style: partial_config.code_style,
                 lualine: partial_config.lualine,
                 diagnostics: partial_config.diagnostics,
-                
+
                 // For dictionaries, only replace if not empty
                 colors: if !partial_config.colors.is_empty() {
                     partial_config.colors
@@ -432,17 +436,17 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
                     current_config.highlights
                 },
             };
-            
+
             // Save the merged config
             set_config(merged_config)?;
         }
-        
+
         // Set up toggle key if configured
         let config = get_config()?;
         if let Some(toggle_key) = &config.toggle_style_key {
             if !toggle_key.is_empty() {
                 let opts = SetKeymapOpts::builder().noremap(true).silent(true).build();
-                
+
                 api::set_keymap(
                     Mode::Normal,
                     toggle_key,
@@ -451,7 +455,7 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
                 )?;
             }
         }
-        
+
         Ok(())
     });
 
