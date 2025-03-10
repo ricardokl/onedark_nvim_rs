@@ -383,106 +383,66 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
         Ok(())
     });
 
-    // Create setup function
-    let setup = Function::from_fn(|opts: Option<Dictionary>| -> nvim_oxi::Result<()> {
+    // Create setup function that accepts a OneDarkConfig directly
+    let setup = Function::from_fn(|opts: Option<OneDarkConfig>| -> nvim_oxi::Result<()> {
         // Get current config
         let current_config = get_config()?;
-
-        if let Some(opts) = opts {
-            // Convert the options dictionary to an Object
-            let opts_obj: Object = opts.into();
-
-            // Deserialize the partial config
-            let partial_config = match OneDarkConfig::from_object(opts_obj) {
-                Ok(config) => config,
-                Err(e) => {
-                    api::err_writeln(&format!("Error parsing config: {}", e));
-                    return Ok(());
-                }
+        
+        // If options were provided, merge them with current config
+        if let Some(partial_config) = opts {
+            // Create a merged config - start with current and override with provided values
+            let merged_config = OneDarkConfig {
+                // Only override style if it's not the default
+                style: if partial_config.style != default_style() {
+                    partial_config.style
+                } else {
+                    current_config.style
+                },
+                
+                // Only override toggle_style_list if it's not the default
+                toggle_style_list: if partial_config.toggle_style_list != default_toggle_style_list() {
+                    partial_config.toggle_style_list
+                } else {
+                    current_config.toggle_style_list
+                },
+                
+                // For other fields, prefer the partial config value if provided
+                toggle_style_index: current_config.toggle_style_index,
+                toggle_style_key: partial_config.toggle_style_key.or(current_config.toggle_style_key),
+                transparent: partial_config.transparent,
+                term_colors: partial_config.term_colors,
+                ending_tildes: partial_config.ending_tildes,
+                cmp_itemkind_reverse: partial_config.cmp_itemkind_reverse,
+                loaded: current_config.loaded, // Keep the loaded status
+                
+                // For nested structures, use the provided ones
+                code_style: partial_config.code_style,
+                lualine: partial_config.lualine,
+                diagnostics: partial_config.diagnostics,
+                
+                // For dictionaries, only replace if not empty
+                colors: if !partial_config.colors.is_empty() {
+                    partial_config.colors
+                } else {
+                    current_config.colors
+                },
+                highlights: if !partial_config.highlights.is_empty() {
+                    partial_config.highlights
+                } else {
+                    current_config.highlights
+                },
             };
-
-            // Create a merged config
-            let mut merged_config = current_config;
-
-            // Update fields that were explicitly set in the partial config
-
-            // Style (handled specially due to custom serializer)
-            if let Some(style_str) = opts.get::<String>("style").ok() {
-                if let Ok(style) = OneDarkStyle::from_str(&style_str) {
-                    merged_config.style = style;
-                }
-            }
-
-            // Toggle style list (handled specially due to custom serializer)
-            if let Some(style_list) = opts.get::<Vec<String>>("toggle_style_list").ok() {
-                let mut styles = Vec::new();
-                for s in style_list {
-                    if let Ok(style) = OneDarkStyle::from_str(&s) {
-                        styles.push(style);
-                    }
-                }
-                if !styles.is_empty() {
-                    merged_config.toggle_style_list = styles;
-                }
-            }
-
-            // Other fields
-            if opts.contains_key("toggle_style_key") {
-                merged_config.toggle_style_key = partial_config.toggle_style_key;
-            }
-
-            if opts.contains_key("transparent") {
-                merged_config.transparent = partial_config.transparent;
-            }
-
-            if opts.contains_key("term_colors") {
-                merged_config.term_colors = partial_config.term_colors;
-            }
-
-            if opts.contains_key("ending_tildes") {
-                merged_config.ending_tildes = partial_config.ending_tildes;
-            }
-
-            if opts.contains_key("cmp_itemkind_reverse") {
-                merged_config.cmp_itemkind_reverse = partial_config.cmp_itemkind_reverse;
-            }
-
-            // Handle nested structures
-            if opts.contains_key("code_style") {
-                merged_config.code_style = partial_config.code_style;
-            }
-
-            if opts.contains_key("lualine") {
-                merged_config.lualine = partial_config.lualine;
-            }
-
-            if opts.contains_key("diagnostics") {
-                merged_config.diagnostics = partial_config.diagnostics;
-            }
-
-            // Colors and highlights dictionaries
-            if opts.contains_key("colors") {
-                if let Ok(colors) = opts.get::<Dictionary>("colors") {
-                    merged_config.colors = colors;
-                }
-            }
-
-            if opts.contains_key("highlights") {
-                if let Ok(highlights) = opts.get::<Dictionary>("highlights") {
-                    merged_config.highlights = highlights;
-                }
-            }
-
+            
             // Save the merged config
             set_config(merged_config)?;
         }
-
+        
         // Set up toggle key if configured
         let config = get_config()?;
         if let Some(toggle_key) = &config.toggle_style_key {
             if !toggle_key.is_empty() {
                 let opts = SetKeymapOpts::builder().noremap(true).silent(true).build();
-
+                
                 api::set_keymap(
                     Mode::Normal,
                     toggle_key,
@@ -491,7 +451,7 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
                 )?;
             }
         }
-
+        
         Ok(())
     });
 
