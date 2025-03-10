@@ -71,6 +71,27 @@ impl OneDarkStyle {
     }
 }
 
+// Default functions for config fields
+fn default_style() -> OneDarkStyle {
+    OneDarkStyle::Dark
+}
+
+fn default_toggle_style_list() -> Vec<OneDarkStyle> {
+    OneDarkStyle::all_styles()
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_comments_style() -> String {
+    "italic".to_string()
+}
+
+fn default_none_style() -> String {
+    "none".to_string()
+}
+
 // Serializer modules to handle string conversion for Neovim compatibility
 mod style_string_serializer {
     use super::OneDarkStyle;
@@ -127,44 +148,112 @@ mod style_vec_serializer {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-struct OneDarkConfig {
-    #[serde(with = "style_string_serializer")]
-    style: OneDarkStyle,
-    #[serde(with = "style_vec_serializer")]
-    toggle_style_list: Vec<OneDarkStyle>,
-    toggle_style_index: i64,
-    toggle_style_key: Option<String>,
-    transparent: bool,
-    term_colors: bool,
-    ending_tildes: bool,
-    cmp_itemkind_reverse: bool,
-    loaded: bool,
-    code_style: CodeStyle,
-    lualine: LualineConfig,
-    colors: Dictionary,
-    highlights: Dictionary,
-    diagnostics: DiagnosticsConfig,
+struct CodeStyle {
+    #[serde(default = "default_comments_style")]
+    comments: String,
+    
+    #[serde(default = "default_none_style")]
+    keywords: String,
+    
+    #[serde(default = "default_none_style")]
+    functions: String,
+    
+    #[serde(default = "default_none_style")]
+    strings: String,
+    
+    #[serde(default = "default_none_style")]
+    variables: String,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-struct CodeStyle {
-    comments: String,
-    keywords: String,
-    functions: String,
-    strings: String,
-    variables: String,
+impl Default for CodeStyle {
+    fn default() -> Self {
+        Self {
+            comments: default_comments_style(),
+            keywords: default_none_style(),
+            functions: default_none_style(),
+            strings: default_none_style(),
+            variables: default_none_style(),
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 struct LualineConfig {
+    #[serde(default)]
     transparent: bool,
+}
+
+impl Default for LualineConfig {
+    fn default() -> Self {
+        Self { transparent: false }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 struct DiagnosticsConfig {
+    #[serde(default = "default_true")]
     darker: bool,
+    
+    #[serde(default = "default_true")]
     undercurl: bool,
+    
+    #[serde(default = "default_true")]
     background: bool,
+}
+
+impl Default for DiagnosticsConfig {
+    fn default() -> Self {
+        Self {
+            darker: true,
+            undercurl: true,
+            background: true,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct OneDarkConfig {
+    #[serde(with = "style_string_serializer", default = "default_style")]
+    style: OneDarkStyle,
+    
+    #[serde(with = "style_vec_serializer", default = "default_toggle_style_list")]
+    toggle_style_list: Vec<OneDarkStyle>,
+    
+    #[serde(default)]
+    toggle_style_index: i64,
+    
+    #[serde(default)]
+    toggle_style_key: Option<String>,
+    
+    #[serde(default)]
+    transparent: bool,
+    
+    #[serde(default = "default_true")]
+    term_colors: bool,
+    
+    #[serde(default)]
+    ending_tildes: bool,
+    
+    #[serde(default)]
+    cmp_itemkind_reverse: bool,
+    
+    #[serde(default = "default_true")]
+    loaded: bool,
+    
+    #[serde(default)]
+    code_style: CodeStyle,
+    
+    #[serde(default)]
+    lualine: LualineConfig,
+    
+    #[serde(default)]
+    colors: Dictionary,
+    
+    #[serde(default)]
+    highlights: Dictionary,
+    
+    #[serde(default)]
+    diagnostics: DiagnosticsConfig,
 }
 
 impl FromObject for OneDarkConfig {
@@ -186,30 +275,20 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
 
     // Set up default config
     let default_config = OneDarkConfig {
-        style: OneDarkStyle::Dark,
-        toggle_style_list: OneDarkStyle::all_styles(),
+        style: default_style(),
+        toggle_style_list: default_toggle_style_list(),
         toggle_style_index: 0,
         toggle_style_key: None,
         transparent: false,
-        term_colors: true,
+        term_colors: default_true(),
         ending_tildes: false,
         cmp_itemkind_reverse: false,
-        loaded: true,
-        code_style: CodeStyle {
-            comments: "italic".to_string(),
-            keywords: "none".to_string(),
-            functions: "none".to_string(),
-            strings: "none".to_string(),
-            variables: "none".to_string(),
-        },
-        lualine: LualineConfig { transparent: false },
+        loaded: default_true(),
+        code_style: Default::default(),
+        lualine: Default::default(),
         colors: Dictionary::new(),
         highlights: Dictionary::new(),
-        diagnostics: DiagnosticsConfig {
-            darker: true,
-            undercurl: true,
-            background: true,
-        },
+        diagnostics: Default::default(),
     };
 
     // Convert to Dictionary for Neovim API
@@ -306,102 +385,104 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
 
     // Create setup function
     let setup = Function::from_fn(|opts: Option<Dictionary>| -> nvim_oxi::Result<()> {
-        let mut config = get_config()?;
-
+        // Get current config
+        let current_config = get_config()?;
+        
         if let Some(opts) = opts {
-            // Handle style if present
-            if let Ok(style_str) = opts.get::<String>("style") {
+            // Convert the options dictionary to an Object
+            let opts_obj: Object = opts.into();
+            
+            // Deserialize the partial config
+            let partial_config = match OneDarkConfig::from_object(opts_obj) {
+                Ok(config) => config,
+                Err(e) => {
+                    api::err_writeln(&format!("Error parsing config: {}", e));
+                    return Ok(());
+                }
+            };
+            
+            // Create a merged config
+            let mut merged_config = current_config;
+            
+            // Update fields that were explicitly set in the partial config
+            
+            // Style (handled specially due to custom serializer)
+            if let Some(style_str) = opts.get::<String>("style").ok() {
                 if let Ok(style) = OneDarkStyle::from_str(&style_str) {
-                    config.style = style;
+                    merged_config.style = style;
                 }
             }
-
-            // Handle toggle_style_list separately if present
-            if let Ok(style_strings) = opts.get::<Vec<String>>("toggle_style_list") {
+            
+            // Toggle style list (handled specially due to custom serializer)
+            if let Some(style_list) = opts.get::<Vec<String>>("toggle_style_list").ok() {
                 let mut styles = Vec::new();
-                for s in style_strings {
+                for s in style_list {
                     if let Ok(style) = OneDarkStyle::from_str(&s) {
                         styles.push(style);
                     }
                 }
                 if !styles.is_empty() {
-                    config.toggle_style_list = styles;
+                    merged_config.toggle_style_list = styles;
                 }
             }
-
-            // Handle code_style if present
-            if let Ok(code_style_dict) = opts.get::<Dictionary>("code_style") {
-                if let Ok(comments) = code_style_dict.get::<String>("comments") {
-                    config.code_style.comments = comments;
+            
+            // Other fields
+            if opts.contains_key("toggle_style_key") {
+                merged_config.toggle_style_key = partial_config.toggle_style_key;
+            }
+            
+            if opts.contains_key("transparent") {
+                merged_config.transparent = partial_config.transparent;
+            }
+            
+            if opts.contains_key("term_colors") {
+                merged_config.term_colors = partial_config.term_colors;
+            }
+            
+            if opts.contains_key("ending_tildes") {
+                merged_config.ending_tildes = partial_config.ending_tildes;
+            }
+            
+            if opts.contains_key("cmp_itemkind_reverse") {
+                merged_config.cmp_itemkind_reverse = partial_config.cmp_itemkind_reverse;
+            }
+            
+            // Handle nested structures
+            if opts.contains_key("code_style") {
+                merged_config.code_style = partial_config.code_style;
+            }
+            
+            if opts.contains_key("lualine") {
+                merged_config.lualine = partial_config.lualine;
+            }
+            
+            if opts.contains_key("diagnostics") {
+                merged_config.diagnostics = partial_config.diagnostics;
+            }
+            
+            // Colors and highlights dictionaries
+            if opts.contains_key("colors") {
+                if let Ok(colors) = opts.get::<Dictionary>("colors") {
+                    merged_config.colors = colors;
                 }
-                if let Ok(keywords) = code_style_dict.get::<String>("keywords") {
-                    config.code_style.keywords = keywords;
-                }
-                if let Ok(functions) = code_style_dict.get::<String>("functions") {
-                    config.code_style.functions = functions;
-                }
-                if let Ok(strings) = code_style_dict.get::<String>("strings") {
-                    config.code_style.strings = strings;
-                }
-                if let Ok(variables) = code_style_dict.get::<String>("variables") {
-                    config.code_style.variables = variables;
+            }
+            
+            if opts.contains_key("highlights") {
+                if let Ok(highlights) = opts.get::<Dictionary>("highlights") {
+                    merged_config.highlights = highlights;
                 }
             }
-
-            // Handle lualine if present
-            if let Ok(lualine_dict) = opts.get::<Dictionary>("lualine") {
-                if let Ok(transparent) = lualine_dict.get::<bool>("transparent") {
-                    config.lualine.transparent = transparent;
-                }
-            }
-
-            // Handle diagnostics if present
-            if let Ok(diagnostics_dict) = opts.get::<Dictionary>("diagnostics") {
-                if let Ok(darker) = diagnostics_dict.get::<bool>("darker") {
-                    config.diagnostics.darker = darker;
-                }
-                if let Ok(undercurl) = diagnostics_dict.get::<bool>("undercurl") {
-                    config.diagnostics.undercurl = undercurl;
-                }
-                if let Ok(background) = diagnostics_dict.get::<bool>("background") {
-                    config.diagnostics.background = background;
-                }
-            }
-
-            // Handle other top-level options
-            if let Ok(toggle_key) = opts.get::<String>("toggle_style_key") {
-                config.toggle_style_key = Some(toggle_key);
-            }
-            if let Ok(transparent) = opts.get::<bool>("transparent") {
-                config.transparent = transparent;
-            }
-            if let Ok(term_colors) = opts.get::<bool>("term_colors") {
-                config.term_colors = term_colors;
-            }
-            if let Ok(ending_tildes) = opts.get::<bool>("ending_tildes") {
-                config.ending_tildes = ending_tildes;
-            }
-            if let Ok(cmp_itemkind_reverse) = opts.get::<bool>("cmp_itemkind_reverse") {
-                config.cmp_itemkind_reverse = cmp_itemkind_reverse;
-            }
-
-            // Update colors and highlights dictionaries if present
-            if let Ok(colors) = opts.get::<Dictionary>("colors") {
-                config.colors = colors;
-            }
-            if let Ok(highlights) = opts.get::<Dictionary>("highlights") {
-                config.highlights = highlights;
-            }
-
-            // Save the updated config
-            set_config(config.clone())?;
+            
+            // Save the merged config
+            set_config(merged_config)?;
         }
-
+        
         // Set up toggle key if configured
+        let config = get_config()?;
         if let Some(toggle_key) = &config.toggle_style_key {
             if !toggle_key.is_empty() {
                 let opts = SetKeymapOpts::builder().noremap(true).silent(true).build();
-
+                
                 api::set_keymap(
                     Mode::Normal,
                     toggle_key,
@@ -410,7 +491,7 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
                 )?;
             }
         }
-
+        
         Ok(())
     });
 
