@@ -307,13 +307,17 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
     let default_config_dict = default_config.to_object()?.try_into::<Dictionary>()?;
 
     // Initialize global config if not already set
-    if api::get_var::<Option<Dictionary>>("onedark_config").unwrap_or(None).is_none() {
+    if api::get_var::<Option<Dictionary>>("onedark_config")
+        .unwrap_or(None)
+        .is_none()
+    {
         api::set_var("onedark_config", default_config_dict)?;
     }
 
     // Helper function to get config
     fn get_config() -> nvim_oxi::Result<OneDarkConfig> {
-        let config_dict = match api::get_var::<Option<Dictionary>>("onedark_config").unwrap_or(None) {
+        let config_dict = match api::get_var::<Option<Dictionary>>("onedark_config").unwrap_or(None)
+        {
             Some(dict) => dict,
             None => Dictionary::new(),
         };
@@ -393,7 +397,7 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
         if let Some(partial_config) = opts {
             // Get current config
             let current_config = get_config()?;
-            
+
             // Create a merged config - start with current and override with provided values
             let merged_config = OneDarkConfig {
                 // Only override fields that are explicitly set in partial_config
@@ -408,27 +412,27 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
                 ending_tildes: partial_config.ending_tildes,
                 cmp_itemkind_reverse: partial_config.cmp_itemkind_reverse,
                 loaded: true, // Always set loaded to true
-                
+
                 // For nested structures, use the provided ones
                 code_style: partial_config.code_style,
                 lualine: partial_config.lualine,
                 diagnostics: partial_config.diagnostics,
-                
+
                 // For the new struct types, use the provided ones
                 colors: partial_config.colors,
                 highlights: partial_config.highlights,
             };
-            
+
             // Save the merged config
             set_config(merged_config)?;
         }
-        
+
         // Set up toggle key if configured
         let config = get_config()?;
         if let Some(toggle_key) = &config.toggle_style_key {
             if !toggle_key.is_empty() {
                 let opts = SetKeymapOpts::builder().noremap(true).silent(true).build();
-                
+
                 api::set_keymap(
                     Mode::Normal,
                     toggle_key,
@@ -437,7 +441,7 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
                 )?;
             }
         }
-        
+
         Ok(())
     });
 
