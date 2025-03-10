@@ -9,10 +9,129 @@ use serde::{Deserialize, Serialize};
 mod highlights;
 mod terminal;
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum OneDarkStyle {
+    Dark,
+    Darker,
+    Cool,
+    Deep,
+    Warm,
+    Warmer,
+    Light,
+}
+
+impl OneDarkStyle {
+    // Convert to string for API compatibility
+    fn as_str(&self) -> &'static str {
+        match self {
+            OneDarkStyle::Dark => "dark",
+            OneDarkStyle::Darker => "darker",
+            OneDarkStyle::Cool => "cool",
+            OneDarkStyle::Deep => "deep",
+            OneDarkStyle::Warm => "warm",
+            OneDarkStyle::Warmer => "warmer",
+            OneDarkStyle::Light => "light",
+        }
+    }
+    
+    // Get all available styles as a vector
+    fn all_styles() -> Vec<OneDarkStyle> {
+        vec![
+            OneDarkStyle::Dark,
+            OneDarkStyle::Darker,
+            OneDarkStyle::Cool,
+            OneDarkStyle::Deep,
+            OneDarkStyle::Warm,
+            OneDarkStyle::Warmer,
+            OneDarkStyle::Light,
+        ]
+    }
+    
+    // Get all styles as strings
+    fn all_styles_as_strings() -> Vec<String> {
+        Self::all_styles()
+            .iter()
+            .map(|s| s.as_str().to_string())
+            .collect()
+    }
+    
+    // Parse from string
+    fn from_str(s: &str) -> Result<Self, String> {
+        match s.to_lowercase().as_str() {
+            "dark" => Ok(OneDarkStyle::Dark),
+            "darker" => Ok(OneDarkStyle::Darker),
+            "cool" => Ok(OneDarkStyle::Cool),
+            "deep" => Ok(OneDarkStyle::Deep),
+            "warm" => Ok(OneDarkStyle::Warm),
+            "warmer" => Ok(OneDarkStyle::Warmer),
+            "light" => Ok(OneDarkStyle::Light),
+            _ => Err(format!("Invalid style: {}", s)),
+        }
+    }
+}
+
+// Serializer modules to handle string conversion for Neovim compatibility
+mod style_string_serializer {
+    use super::OneDarkStyle;
+    use serde::{Deserialize, Deserializer, Serializer};
+    use serde::de::Error;
+
+    pub fn serialize<S>(style: &OneDarkStyle, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(style.as_str())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<OneDarkStyle, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        OneDarkStyle::from_str(&s).map_err(D::Error::custom)
+    }
+}
+
+mod style_vec_serializer {
+    use super::OneDarkStyle;
+    use serde::{Deserialize, Deserializer, Serializer};
+    use serde::de::Error;
+    use serde::ser::SerializeSeq;
+
+    pub fn serialize<S>(styles: &[OneDarkStyle], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(styles.len()))?;
+        for style in styles {
+            seq.serialize_element(style.as_str())?;
+        }
+        seq.end()
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<OneDarkStyle>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let strings = Vec::<String>::deserialize(deserializer)?;
+        let mut styles = Vec::with_capacity(strings.len());
+        
+        for s in strings {
+            let style = OneDarkStyle::from_str(&s).map_err(D::Error::custom)?;
+            styles.push(style);
+        }
+        
+        Ok(styles)
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 struct OneDarkConfig {
-    style: String,
-    toggle_style_list: Vec<String>,
+    #[serde(with = "style_string_serializer")]
+    style: OneDarkStyle,
+    #[serde(with = "style_vec_serializer")]
+    toggle_style_list: Vec<OneDarkStyle>,
     toggle_style_index: i64,
     toggle_style_key: Option<String>,
     transparent: bool,
@@ -62,21 +181,13 @@ impl ToObject for OneDarkConfig {
 
 #[nvim_oxi::plugin]
 fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
-    // Define styles list
-    let styles_list = vec![
-        "dark".to_string(),
-        "darker".to_string(),
-        "cool".to_string(),
-        "deep".to_string(),
-        "warm".to_string(),
-        "warmer".to_string(),
-        "light".to_string(),
-    ];
+    // Get all styles as strings for API compatibility
+    let styles_list = OneDarkStyle::all_styles_as_strings();
 
     // Set up default config
     let default_config = OneDarkConfig {
-        style: "dark".to_string(),
-        toggle_style_list: styles_list.clone(),
+        style: OneDarkStyle::Dark,
+        toggle_style_list: OneDarkStyle::all_styles(),
         toggle_style_index: 0,
         toggle_style_key: None,
         transparent: false,
@@ -157,8 +268,8 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
         let background = api::get_option_value::<String>("background", &Default::default())?;
         let mut config = get_config()?;
 
-        if background == "light" || config.style == "light" {
-            config.style = "light".to_string();
+        if background == "light" || config.style == OneDarkStyle::Light {
+            config.style = OneDarkStyle::Light;
             set_config(config)?;
         }
 
@@ -173,18 +284,18 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
     let toggle = Function::from_fn(|()| -> nvim_oxi::Result<()> {
         let mut config = get_config()?;
         let index = config.toggle_style_index + 1;
-        let new_index = if index as usize > config.toggle_style_list.len() {
-            1
+        let new_index = if index as usize >= config.toggle_style_list.len() {
+            0
         } else {
             index
         };
-        let new_style = config.toggle_style_list[new_index as usize - 1].clone();
+        let new_style = config.toggle_style_list[new_index as usize];
 
-        config.style = new_style.clone();
+        config.style = new_style;
         config.toggle_style_index = new_index;
         set_config(config)?;
 
-        if new_style == "light" {
+        if new_style == OneDarkStyle::Light {
             api::set_option_value("background", "light", &Default::default())?;
         } else {
             api::set_option_value("background", "dark", &Default::default())?;
@@ -200,9 +311,24 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
         let mut config = get_config()?;
 
         if let Some(opts) = opts {
+            // Handle style if present
+            if let Ok(style_str) = opts.get::<String>("style") {
+                if let Ok(style) = OneDarkStyle::from_str(&style_str) {
+                    config.style = style;
+                }
+            }
+
             // Handle toggle_style_list separately if present
-            if let Ok(new_toggle_list) = opts.get::<Vec<String>>("toggle_style_list") {
-                config.toggle_style_list = new_toggle_list;
+            if let Ok(style_strings) = opts.get::<Vec<String>>("toggle_style_list") {
+                let mut styles = Vec::new();
+                for s in style_strings {
+                    if let Ok(style) = OneDarkStyle::from_str(&s) {
+                        styles.push(style);
+                    }
+                }
+                if !styles.is_empty() {
+                    config.toggle_style_list = styles;
+                }
             }
 
             // Handle code_style if present
@@ -245,9 +371,6 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
             }
 
             // Handle other top-level options
-            if let Ok(style) = opts.get::<String>("style") {
-                config.style = style;
-            }
             if let Ok(toggle_key) = opts.get::<String>("toggle_style_key") {
                 config.toggle_style_key = Some(toggle_key);
             }
