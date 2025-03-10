@@ -392,44 +392,40 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
     });
 
     // Create setup function that accepts a OneDarkConfig directly
-    let setup = Function::from_fn(|opts: Option<OneDarkConfig>| -> nvim_oxi::Result<()> {
-        // If options were provided, merge them with current config
-        if let Some(partial_config) = opts {
-            // Get current config
-            let current_config = get_config()?;
+    let setup = Function::from_fn(|config: OneDarkConfig| -> nvim_oxi::Result<()> {
+        // Get current config
+        let current_config = get_config()?;
 
-            // Create a merged config - start with current and override with provided values
-            let merged_config = OneDarkConfig {
-                // Only override fields that are explicitly set in partial_config
-                style: partial_config.style,
-                toggle_style_list: partial_config.toggle_style_list,
-                toggle_style_index: current_config.toggle_style_index,
-                toggle_style_key: partial_config
-                    .toggle_style_key
-                    .or(current_config.toggle_style_key),
-                transparent: partial_config.transparent,
-                term_colors: partial_config.term_colors,
-                ending_tildes: partial_config.ending_tildes,
-                cmp_itemkind_reverse: partial_config.cmp_itemkind_reverse,
-                loaded: true, // Always set loaded to true
+        // Create a merged config - start with current and override with provided values
+        let merged_config = OneDarkConfig {
+            // Only override fields that are explicitly set in config
+            style: config.style,
+            toggle_style_list: config.toggle_style_list,
+            toggle_style_index: current_config.toggle_style_index,
+            toggle_style_key: config
+                .toggle_style_key
+                .or(current_config.toggle_style_key),
+            transparent: config.transparent,
+            term_colors: config.term_colors,
+            ending_tildes: config.ending_tildes,
+            cmp_itemkind_reverse: config.cmp_itemkind_reverse,
+            loaded: true, // Always set loaded to true
 
-                // For nested structures, use the provided ones
-                code_style: partial_config.code_style,
-                lualine: partial_config.lualine,
-                diagnostics: partial_config.diagnostics,
+            // For nested structures, use the provided ones
+            code_style: config.code_style,
+            lualine: config.lualine,
+            diagnostics: config.diagnostics,
 
-                // For the new struct types, use the provided ones
-                colors: partial_config.colors,
-                highlights: partial_config.highlights,
-            };
+            // For the new struct types, use the provided ones
+            colors: config.colors,
+            highlights: config.highlights,
+        };
 
-            // Save the merged config
-            set_config(merged_config)?;
-        }
+        // Save the merged config
+        set_config(merged_config)?;
 
         // Set up toggle key if configured
-        let config = get_config()?;
-        if let Some(toggle_key) = &config.toggle_style_key {
+        if let Some(toggle_key) = &merged_config.toggle_style_key {
             if !toggle_key.is_empty() {
                 let opts = SetKeymapOpts::builder().noremap(true).silent(true).build();
 
