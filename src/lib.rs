@@ -85,9 +85,15 @@ fn default_true() -> bool {
 }
 
 // Function to get global config or return None if it doesn't exist
-fn get_global_config() -> Option<Dictionary> {
+fn get_global_config() -> Option<OneDarkConfig> {
     match api::get_var::<Option<Dictionary>>("onedark_config").unwrap_or(None) {
-        Some(dict) => Some(dict),
+        Some(dict) => {
+            // Try to convert the Dictionary to OneDarkConfig using serde
+            match OneDarkConfig::from_object(dict.into()) {
+                Ok(config) => Some(config),
+                Err(_) => None,
+            }
+        },
         None => None,
     }
 }
@@ -95,176 +101,114 @@ fn get_global_config() -> Option<Dictionary> {
 // Functions to extract default values from the global config
 fn get_style_from_global() -> OneDarkStyle {
     if let Some(config) = get_global_config() {
-        if let Ok(style_str) = config.get::<String>("style") {
-            if let Ok(style) = OneDarkStyle::from_str(&style_str) {
-                return style;
-            }
-        }
+        config.style
+    } else {
+        default_style()
     }
-    default_style()
 }
 
 fn get_toggle_style_list_from_global() -> Vec<OneDarkStyle> {
     if let Some(config) = get_global_config() {
-        if let Ok(styles) = config.get::<Vec<String>>("toggle_style_list") {
-            let mut result = Vec::new();
-            for style_str in styles {
-                if let Ok(style) = OneDarkStyle::from_str(&style_str) {
-                    result.push(style);
-                }
-            }
-            if !result.is_empty() {
-                return result;
-            }
-        }
+        config.toggle_style_list
+    } else {
+        default_toggle_style_list()
     }
-    default_toggle_style_list()
 }
 
 fn get_toggle_style_index_from_global() -> i64 {
     if let Some(config) = get_global_config() {
-        if let Ok(index) = config.get::<i64>("toggle_style_index") {
-            return index;
-        }
+        config.toggle_style_index
+    } else {
+        0
     }
-    0
 }
 
 fn get_toggle_style_key_from_global() -> Option<String> {
     if let Some(config) = get_global_config() {
-        if let Ok(key) = config.get::<String>("toggle_style_key") {
-            return Some(key);
-        }
+        config.toggle_style_key.clone()
+    } else {
+        None
     }
-    None
 }
 
 fn get_transparent_from_global() -> bool {
     if let Some(config) = get_global_config() {
-        if let Ok(transparent) = config.get::<bool>("transparent") {
-            return transparent;
-        }
+        config.transparent
+    } else {
+        false
     }
-    false
 }
 
 fn get_term_colors_from_global() -> bool {
     if let Some(config) = get_global_config() {
-        if let Ok(term_colors) = config.get::<bool>("term_colors") {
-            return term_colors;
-        }
+        config.term_colors
+    } else {
+        default_true()
     }
-    default_true()
 }
 
 fn get_ending_tildes_from_global() -> bool {
     if let Some(config) = get_global_config() {
-        if let Ok(ending_tildes) = config.get::<bool>("ending_tildes") {
-            return ending_tildes;
-        }
+        config.ending_tildes
+    } else {
+        false
     }
-    false
 }
 
 fn get_cmp_itemkind_reverse_from_global() -> bool {
     if let Some(config) = get_global_config() {
-        if let Ok(cmp_itemkind_reverse) = config.get::<bool>("cmp_itemkind_reverse") {
-            return cmp_itemkind_reverse;
-        }
+        config.cmp_itemkind_reverse
+    } else {
+        false
     }
-    false
 }
 
 fn get_loaded_from_global() -> bool {
     if let Some(config) = get_global_config() {
-        if let Ok(loaded) = config.get::<bool>("loaded") {
-            return loaded;
-        }
+        config.loaded
+    } else {
+        default_true()
     }
-    default_true()
 }
 
 fn get_code_style_from_global() -> CodeStyle {
     if let Some(config) = get_global_config() {
-        if let Ok(code_style_dict) = config.get::<Dictionary>("code_style") {
-            let mut code_style = CodeStyle::default();
-
-            if let Ok(comments) = code_style_dict.get::<String>("comments") {
-                code_style.comments = comments;
-            }
-            if let Ok(keywords) = code_style_dict.get::<String>("keywords") {
-                code_style.keywords = keywords;
-            }
-            if let Ok(functions) = code_style_dict.get::<String>("functions") {
-                code_style.functions = functions;
-            }
-            if let Ok(strings) = code_style_dict.get::<String>("strings") {
-                code_style.strings = strings;
-            }
-            if let Ok(variables) = code_style_dict.get::<String>("variables") {
-                code_style.variables = variables;
-            }
-
-            return code_style;
-        }
+        config.code_style.clone()
+    } else {
+        CodeStyle::default()
     }
-    CodeStyle::default()
 }
 
 fn get_lualine_from_global() -> LualineConfig {
     if let Some(config) = get_global_config() {
-        if let Ok(lualine_dict) = config.get::<Dictionary>("lualine") {
-            let mut lualine = LualineConfig::default();
-
-            if let Ok(transparent) = lualine_dict.get::<bool>("transparent") {
-                lualine.transparent = transparent;
-            }
-
-            return lualine;
-        }
+        config.lualine.clone()
+    } else {
+        LualineConfig::default()
     }
-    LualineConfig::default()
 }
 
 fn get_diagnostics_from_global() -> DiagnosticsConfig {
     if let Some(config) = get_global_config() {
-        if let Ok(diagnostics_dict) = config.get::<Dictionary>("diagnostics") {
-            let mut diagnostics = DiagnosticsConfig::default();
-
-            if let Ok(darker) = diagnostics_dict.get::<bool>("darker") {
-                diagnostics.darker = darker;
-            }
-            if let Ok(undercurl) = diagnostics_dict.get::<bool>("undercurl") {
-                diagnostics.undercurl = undercurl;
-            }
-            if let Ok(background) = diagnostics_dict.get::<bool>("background") {
-                diagnostics.background = background;
-            }
-
-            return diagnostics;
-        }
+        config.diagnostics.clone()
+    } else {
+        DiagnosticsConfig::default()
     }
-    DiagnosticsConfig::default()
 }
 
 fn get_colors_from_global() -> ColorsConfig {
     if let Some(config) = get_global_config() {
-        if let Ok(_colors_dict) = config.get::<Dictionary>("colors") {
-            // When ColorsConfig has actual fields, extract them here
-            // For now, just return default
-        }
+        config.colors.clone()
+    } else {
+        ColorsConfig::default()
     }
-    ColorsConfig::default()
 }
 
 fn get_highlights_from_global() -> HighlightsConfig {
     if let Some(config) = get_global_config() {
-        if let Ok(_highlights_dict) = config.get::<Dictionary>("highlights") {
-            // When HighlightsConfig has actual fields, extract them here
-            // For now, just return default
-        }
+        config.highlights.clone()
+    } else {
+        HighlightsConfig::default()
     }
-    HighlightsConfig::default()
 }
 
 // Serializer modules to handle string conversion for Neovim compatibility
@@ -342,57 +286,42 @@ struct CodeStyle {
 
 fn get_comments_style_from_global() -> String {
     if let Some(config) = get_global_config() {
-        if let Ok(code_style) = config.get::<Dictionary>("code_style") {
-            if let Ok(comments) = code_style.get::<String>("comments") {
-                return comments;
-            }
-        }
+        config.code_style.comments.clone()
+    } else {
+        "italic".into()
     }
-    "italic".into()
 }
 
 fn get_keywords_style_from_global() -> String {
     if let Some(config) = get_global_config() {
-        if let Ok(code_style) = config.get::<Dictionary>("code_style") {
-            if let Ok(keywords) = code_style.get::<String>("keywords") {
-                return keywords;
-            }
-        }
+        config.code_style.keywords.clone()
+    } else {
+        "none".into()
     }
-    "none".into()
 }
 
 fn get_functions_style_from_global() -> String {
     if let Some(config) = get_global_config() {
-        if let Ok(code_style) = config.get::<Dictionary>("code_style") {
-            if let Ok(functions) = code_style.get::<String>("functions") {
-                return functions;
-            }
-        }
+        config.code_style.functions.clone()
+    } else {
+        "none".into()
     }
-    "none".into()
 }
 
 fn get_strings_style_from_global() -> String {
     if let Some(config) = get_global_config() {
-        if let Ok(code_style) = config.get::<Dictionary>("code_style") {
-            if let Ok(strings) = code_style.get::<String>("strings") {
-                return strings;
-            }
-        }
+        config.code_style.strings.clone()
+    } else {
+        "none".into()
     }
-    "none".into()
 }
 
 fn get_variables_style_from_global() -> String {
     if let Some(config) = get_global_config() {
-        if let Ok(code_style) = config.get::<Dictionary>("code_style") {
-            if let Ok(variables) = code_style.get::<String>("variables") {
-                return variables;
-            }
-        }
+        config.code_style.variables.clone()
+    } else {
+        "none".into()
     }
-    "none".into()
 }
 
 #[derive(Clone, Serialize, Deserialize)]
