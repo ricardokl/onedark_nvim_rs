@@ -402,9 +402,7 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
             style: config.style,
             toggle_style_list: config.toggle_style_list,
             toggle_style_index: current_config.toggle_style_index,
-            toggle_style_key: config
-                .toggle_style_key
-                .or(current_config.toggle_style_key),
+            toggle_style_key: config.toggle_style_key.or(current_config.toggle_style_key),
             transparent: config.transparent,
             term_colors: config.term_colors,
             ending_tildes: config.ending_tildes,
