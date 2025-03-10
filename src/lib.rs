@@ -196,7 +196,7 @@ fn get_code_style_from_global() -> CodeStyle {
     if let Some(config) = get_global_config() {
         if let Ok(code_style_dict) = config.get::<Dictionary>("code_style") {
             let mut code_style = CodeStyle::default();
-            
+
             if let Ok(comments) = code_style_dict.get::<String>("comments") {
                 code_style.comments = comments;
             }
@@ -212,7 +212,7 @@ fn get_code_style_from_global() -> CodeStyle {
             if let Ok(variables) = code_style_dict.get::<String>("variables") {
                 code_style.variables = variables;
             }
-            
+
             return code_style;
         }
     }
@@ -223,11 +223,11 @@ fn get_lualine_from_global() -> LualineConfig {
     if let Some(config) = get_global_config() {
         if let Ok(lualine_dict) = config.get::<Dictionary>("lualine") {
             let mut lualine = LualineConfig::default();
-            
+
             if let Ok(transparent) = lualine_dict.get::<bool>("transparent") {
                 lualine.transparent = transparent;
             }
-            
+
             return lualine;
         }
     }
@@ -238,7 +238,7 @@ fn get_diagnostics_from_global() -> DiagnosticsConfig {
     if let Some(config) = get_global_config() {
         if let Ok(diagnostics_dict) = config.get::<Dictionary>("diagnostics") {
             let mut diagnostics = DiagnosticsConfig::default();
-            
+
             if let Ok(darker) = diagnostics_dict.get::<bool>("darker") {
                 diagnostics.darker = darker;
             }
@@ -248,7 +248,7 @@ fn get_diagnostics_from_global() -> DiagnosticsConfig {
             if let Ok(background) = diagnostics_dict.get::<bool>("background") {
                 diagnostics.background = background;
             }
-            
+
             return diagnostics;
         }
     }
@@ -411,7 +411,10 @@ struct OneDarkConfig {
     #[serde(with = "style_string_serializer", default = "get_style_from_global")]
     style: OneDarkStyle,
 
-    #[serde(with = "style_vec_serializer", default = "get_toggle_style_list_from_global")]
+    #[serde(
+        with = "style_vec_serializer",
+        default = "get_toggle_style_list_from_global"
+    )]
     toggle_style_list: Vec<OneDarkStyle>,
 
     #[serde(default = "get_toggle_style_index_from_global")]
