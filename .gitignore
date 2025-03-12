@@ -1,0 +1,6 @@
+/target
+.aider*
+api.rs
+docs.txt
+highlights.lua
+mechanics.rs
