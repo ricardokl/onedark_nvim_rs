@@ -10,6 +10,10 @@ use serde::{Deserialize, Serialize};
 mod highlights;
 mod palette;
 mod terminal;
+mod util;
+
+use crate::highlights::Highlights;
+use crate::palette::ConfigColorPalette;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -67,7 +71,7 @@ impl OneDarkStyle {
 
 impl Default for OneDarkStyle {
     fn default() -> Self {
-        if let Some(config) = get_global_config() {
+        if let Some(config) = get_global_config::<ConfigColorPalette>() {
             config.style
         } else {
             OneDarkStyle::Dark
@@ -76,8 +80,8 @@ impl Default for OneDarkStyle {
 }
 
 // Function to get global config or return None if it doesn't exist
-fn get_global_config() -> Option<OneDarkConfig> {
-    let result: Option<OneDarkConfig> = api::get_var("onedark_config").ok();
+fn get_global_config<T: Default + for<'a> Deserialize<'a>>() -> Option<OneDarkConfig<T>> {
+    let result: Option<OneDarkConfig<T>> = api::get_var("onedark_config").ok();
     result
 }
 
@@ -148,7 +152,7 @@ struct CodeStyle {
 
 impl Default for CodeStyle {
     fn default() -> Self {
-        if let Some(config) = get_global_config() {
+        if let Some(config) = get_global_config::<ConfigColorPalette>() {
             config.code_style
         } else {
             CodeStyle {
@@ -170,7 +174,7 @@ struct LualineConfig {
 
 impl Default for LualineConfig {
     fn default() -> Self {
-        if let Some(config) = get_global_config() {
+        if let Some(config) = get_global_config::<ConfigColorPalette>() {
             config.lualine
         } else {
             LualineConfig { transparent: false }
@@ -187,7 +191,7 @@ struct DiagnosticsConfig {
 
 impl Default for DiagnosticsConfig {
     fn default() -> Self {
-        if let Some(config) = get_global_config() {
+        if let Some(config) = get_global_config::<ConfigColorPalette>() {
             config.diagnostics
         } else {
             DiagnosticsConfig {
@@ -199,13 +203,6 @@ impl Default for DiagnosticsConfig {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize)]
-#[serde(default)]
-struct ColorsConfig {
-    // This will be populated with actual color fields later
-    // For now, it's just a placeholder
-}
-
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct HighlightsConfig {
@@ -215,7 +212,7 @@ struct HighlightsConfig {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
-struct OneDarkConfig {
+struct OneDarkConfig<T: Default> {
     #[serde(with = "style_string_serializer")]
     style: OneDarkStyle,
     #[serde(with = "style_vec_serializer")]
@@ -229,12 +226,22 @@ struct OneDarkConfig {
     loaded: bool,
     code_style: CodeStyle,
     lualine: LualineConfig,
-    colors: ColorsConfig,
-    highlights: HighlightsConfig,
+    colors: T,
+    highlights: Option<Highlights>,
     diagnostics: DiagnosticsConfig,
 }
 
-impl Default for OneDarkConfig {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
+struct OptionalColors(Option<ConfigColorPalette>);
+
+impl Default for OptionalColors {
+    fn default() -> Self {
+        OptionalColors(None)
+    }
+}
+
+impl<T: Default + for<'a> Deserialize<'a>> Default for OneDarkConfig<T> {
     fn default() -> Self {
         if let Some(config) = get_global_config() {
             config
@@ -248,32 +255,33 @@ impl Default for OneDarkConfig {
                 ending_tildes: false,
                 cmp_itemkind_reverse: false,
                 loaded: true, // TODO: Review why this is
+                highlights: None,
                 ..Default::default()
             }
         }
     }
 }
 
-impl FromObject for OneDarkConfig {
+impl<T: Default + for<'a> Deserialize<'a>> FromObject for OneDarkConfig<T> {
     fn from_object(obj: Object) -> Result<Self, ConversionError> {
         Self::deserialize(Deserializer::new(obj)).map_err(Into::into)
     }
 }
 
-impl ToObject for OneDarkConfig {
+impl<T: Default + for<'a> Serialize> ToObject for OneDarkConfig<T> {
     fn to_object(self) -> Result<Object, ConversionError> {
         self.serialize(Serializer::new()).map_err(Into::into)
     }
 }
 
-impl lua::Poppable for OneDarkConfig {
+impl<T: Default + for<'a> Deserialize<'a>> lua::Poppable for OneDarkConfig<T> {
     unsafe fn pop(lstate: *mut lua::ffi::State) -> Result<Self, lua::Error> {
         let obj = Object::pop(lstate)?;
         Self::from_object(obj).map_err(lua::Error::pop_error_from_err::<Self, _>)
     }
 }
 
-impl lua::Pushable for OneDarkConfig {
+impl<T: Default + for<'a> Serialize> lua::Pushable for OneDarkConfig<T> {
     unsafe fn push(self, lstate: *mut lua::ffi::State) -> Result<std::ffi::c_int, lua::Error> {
         self.to_object()
             .map_err(lua::Error::push_error_from_err::<Self, _>)?
@@ -326,7 +334,7 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
     // Create toggle function
     let toggle: Function<(), nvim_oxi::Result<()>> =
         Function::from_fn(move |()| -> nvim_oxi::Result<()> {
-            if let Some(mut config) = get_global_config() {
+            if let Some(mut config) = get_global_config::<ConfigColorPalette>() {
                 let index = config.toggle_style_index + 1;
                 let new_index = if index as usize >= config.toggle_style_list.len() {
                     0
@@ -351,36 +359,41 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
         });
 
     // Create setup function that accepts a OneDarkConfig directly
-    let setup: Function<Option<OneDarkConfig>, nvim_oxi::Result<()>> =
-        Function::from_fn(|opts: Option<OneDarkConfig>| -> nvim_oxi::Result<()> {
-            if let Some(config) = opts {
-                // If opts are passed:
-                // If "onedark_config" was not set, opts are merged with default, and "onedark_config" is set
-                // Else, opts are merged with "onedark_config", and "onedark_config" is reset
-                api::set_var("onedark_config", config)?;
-            } else {
-                // If opts are not passed:
-                // Default already checks if "onedark_config" is set, so no need to check again
-                // But this also takes care setting "onedark_config" to default if it wasn't set
-                // Optional: set "onedark_config" only if needed (if get_global_config().is_none())
-                api::set_var("onedark_config", OneDarkConfig::default())?;
-            }
-
-            if let Some(mut config) = get_global_config() {
-                // false || true = true
-                // true || true = true
-                config.loaded = config.loaded || true;
-                if let Some(key) = config.toggle_style_key {
-                    api::set_keymap(
-                        Mode::Normal,
-                        &key,
-                        "<cmd>lua require(\"onedark\").toggle()<cr>",
-                        &SetKeymapOpts::builder().silent(true).noremap(true).build(),
+    let setup: Function<Option<OneDarkConfig<ConfigColorPalette>>, nvim_oxi::Result<()>> =
+        Function::from_fn(
+            |opts: Option<OneDarkConfig<ConfigColorPalette>>| -> nvim_oxi::Result<()> {
+                if let Some(config) = opts {
+                    // If opts are passed:
+                    // If "onedark_config" was not set, opts are merged with default, and "onedark_config" is set
+                    // Else, opts are merged with "onedark_config", and "onedark_config" is reset
+                    api::set_var("onedark_config", config)?;
+                } else {
+                    // If opts are not passed:
+                    // Default already checks if "onedark_config" is set, so no need to check again
+                    // But this also takes care setting "onedark_config" to default if it wasn't set
+                    // Optional: set "onedark_config" only if needed (if get_global_config().is_none())
+                    api::set_var(
+                        "onedark_config",
+                        OneDarkConfig::<ConfigColorPalette>::default(),
                     )?;
                 }
-            };
-            Ok(())
-        });
+
+                if let Some(mut config) = get_global_config::<ConfigColorPalette>() {
+                    // false || true = true
+                    // true || true = true
+                    config.loaded = config.loaded || true;
+                    if let Some(key) = config.toggle_style_key {
+                        api::set_keymap(
+                            Mode::Normal,
+                            &key,
+                            "<cmd>lua require(\"onedark\").toggle()<cr>",
+                            &SetKeymapOpts::builder().silent(true).noremap(true).build(),
+                        )?;
+                    }
+                };
+                Ok(())
+            },
+        );
 
     // Create load function
     let load: Function<(), nvim_oxi::Result<()>> =

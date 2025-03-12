@@ -1,6 +1,9 @@
+use crate::get_global_config;
 use crate::OneDarkStyle;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(default)]
 pub struct ColorPalette {
     pub black: String,
     pub bg0: String,
@@ -28,6 +31,36 @@ pub struct ColorPalette {
     pub diff_delete: String,
     pub diff_change: String,
     pub diff_text: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct ConfigColorPalette {
+    pub black: Option<String>,
+    pub bg0: Option<String>,
+    pub bg1: Option<String>,
+    pub bg2: Option<String>,
+    pub bg3: Option<String>,
+    pub bg_d: Option<String>,
+    pub bg_blue: Option<String>,
+    pub bg_yellow: Option<String>,
+    pub fg: Option<String>,
+    pub purple: Option<String>,
+    pub green: Option<String>,
+    pub orange: Option<String>,
+    pub blue: Option<String>,
+    pub yellow: Option<String>,
+    pub cyan: Option<String>,
+    pub red: Option<String>,
+    pub grey: Option<String>,
+    pub light_grey: Option<String>,
+    pub dark_cyan: Option<String>,
+    pub dark_red: Option<String>,
+    pub dark_yellow: Option<String>,
+    pub dark_purple: Option<String>,
+    pub diff_add: Option<String>,
+    pub diff_delete: Option<String>,
+    pub diff_change: Option<String>,
+    pub diff_text: Option<String>,
 }
 
 pub fn get_palette(style: OneDarkStyle) -> ColorPalette {
@@ -228,5 +261,16 @@ pub fn get_palette(style: OneDarkStyle) -> ColorPalette {
             diff_change: "#e2ecfb".to_string(),
             diff_text: "#cad3e0".to_string(),
         },
+    }
+}
+
+impl Default for ColorPalette {
+    fn default() -> Self {
+        if let Some(config) = get_global_config::<ConfigColorPalette>() {
+            let style = config.style;
+            get_palette(style)
+        } else {
+            get_palette(OneDarkStyle::default())
+        }
     }
 }
