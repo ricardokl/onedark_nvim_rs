@@ -31,6 +31,36 @@ impl Default for HighlightGroup {
     }
 }
 
+impl HighlightGroup {
+    pub fn fg(fg: &str) -> Self {
+        HighlightGroup {
+            fg: fg.to_string(),
+            ..Default::default()
+        }
+    }
+
+    pub fn bg(bg: &str) -> Self {
+        HighlightGroup {
+            bg: bg.to_string(),
+            ..Default::default()
+        }
+    }
+
+    pub fn sp(sp: &str) -> Self {
+        HighlightGroup {
+            sp: sp.to_string(),
+            ..Default::default()
+        }
+    }
+
+    pub fn fmt(fmt: &str) -> Self {
+        HighlightGroup {
+            fmt: fmt.to_string(),
+            ..Default::default()
+        }
+    }
+}
+
 // Highlight collection structure
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
@@ -390,9 +420,8 @@ impl Default for Highlights {
 }
 
 impl Highlights {
-    pub fn new(palette: &ColorPalette, config: &ColorPalette) -> Self {
-        let mut hl = Highlights::default();
-        hl
+    pub fn new() -> Self {
+        Highlights::default()
     }
 }
 
@@ -411,6 +440,33 @@ fn vim_highlights(highlights: &HashMap<String, HighlightGroup>) -> Result<()> {
             .build();
 
         api::set_hl(0, group_name, &opts)?;
+    }
+    Ok(())
+}
+
+// Merge user-defined highlights without overwriting with "none"
+fn merge_highlights(highlights: &HashMap<String, HighlightGroup>) -> Result<()> {
+    for (group_name, group_settings) in highlights {
+        let mut opts = SetHighlightOpts::builder();
+
+        if group_settings.fg != "none" {
+            opts.foreground(&group_settings.fg);
+        }
+        if group_settings.bg != "none" {
+            opts.background(&group_settings.bg);
+        }
+        if group_settings.sp != "none" {
+            opts.special(&group_settings.sp);
+        }
+        if group_settings.fmt != "none" {
+            opts.italic(group_settings.fmt == "italic")
+                .bold(group_settings.fmt == "bold")
+                .underline(group_settings.fmt == "underline")
+                .undercurl(group_settings.fmt == "undercurl")
+                .reverse(group_settings.fmt == "reverse");
+        }
+
+        api::set_hl(0, group_name, &opts.build())?;
     }
     Ok(())
 }
@@ -443,37 +499,107 @@ pub fn setup() -> Result<()> {
     // Apply user-defined highlights
     if let Some(config) = get_global_config::<ConfigColorPalette>() {
         if let Some(highlights) = config.highlights {
-            for (group_name, group_settings) in highlights {
-                if let Ok(settings) = group_settings.as_dictionary() {
-                    let mut opts = SetHighlightOpts::builder();
+            // Convert user highlights to a HashMap<String, HighlightGroup>
+            let mut highlight_map = HashMap::new();
 
-                    if let Some(fg) = settings.get("fg").and_then(|f| f.as_str().ok()) {
-                        let color = if fg.starts_with('$') {
-                            let name = &fg[1..];
-                            match name {
-                                "fg" => Some(palette.fg.clone()),
-                                "bg0" => Some(palette.bg0.clone()),
-                                "red" => Some(palette.red.clone()),
-                                // Add more color mappings as needed
-                                _ => {
-                                    eprintln!("onedark.nvim: unknown color \"{}\"", name);
-                                    None
+            // Use Object methods to iterate over the keys and values
+            if let Ok(keys) = highlights.keys() {
+                for key in keys {
+                    if let Ok(key_str) = key.as_str() {
+                        if let Ok(value) = highlights.get(key_str) {
+                            if let Ok(settings) = value.as_dictionary() {
+                                let mut highlight = HighlightGroup::default();
+
+                                if let Some(fg) = settings.get("fg").and_then(|f| f.as_str().ok()) {
+                                    let color = if fg.starts_with('$') {
+                                        let name = &fg[1..];
+                                        match name {
+                                            "fg" => Some(palette.fg.clone()),
+                                            "bg0" => Some(palette.bg0.clone()),
+                                            "red" => Some(palette.red.clone()),
+                                            // Add more color mappings as needed
+                                            _ => {
+                                                eprintln!(
+                                                    "onedark.nvim: unknown color \"{}\"",
+                                                    name
+                                                );
+                                                None
+                                            }
+                                        }
+                                    } else {
+                                        Some(fg.to_string())
+                                    };
+
+                                    if let Some(color) = color {
+                                        highlight.fg = color;
+                                    }
                                 }
-                            }
-                        } else {
-                            Some(fg.to_string())
-                        };
 
-                        if let Some(color) = color {
-                            opts = opts.foreground(Some(color));
+                                // Similar handling for bg, sp, and fmt
+                                if let Some(bg) = settings.get("bg").and_then(|b| b.as_str().ok()) {
+                                    let color = if bg.starts_with('$') {
+                                        let name = &bg[1..];
+                                        match name {
+                                            "fg" => Some(palette.fg.clone()),
+                                            "bg0" => Some(palette.bg0.clone()),
+                                            "red" => Some(palette.red.clone()),
+                                            // Add more color mappings as needed
+                                            _ => {
+                                                eprintln!(
+                                                    "onedark.nvim: unknown color \"{}\"",
+                                                    name
+                                                );
+                                                None
+                                            }
+                                        }
+                                    } else {
+                                        Some(bg.to_string())
+                                    };
+
+                                    if let Some(color) = color {
+                                        highlight.bg = color;
+                                    }
+                                }
+
+                                if let Some(sp) = settings.get("sp").and_then(|s| s.as_str().ok()) {
+                                    let color = if sp.starts_with('$') {
+                                        let name = &sp[1..];
+                                        match name {
+                                            "fg" => Some(palette.fg.clone()),
+                                            "bg0" => Some(palette.bg0.clone()),
+                                            "red" => Some(palette.red.clone()),
+                                            // Add more color mappings as needed
+                                            _ => {
+                                                eprintln!(
+                                                    "onedark.nvim: unknown color \"{}\"",
+                                                    name
+                                                );
+                                                None
+                                            }
+                                        }
+                                    } else {
+                                        Some(sp.to_string())
+                                    };
+
+                                    if let Some(color) = color {
+                                        highlight.sp = color;
+                                    }
+                                }
+
+                                if let Some(fmt) = settings.get("fmt").and_then(|f| f.as_str().ok())
+                                {
+                                    highlight.fmt = fmt.to_string();
+                                }
+
+                                highlight_map.insert(key_str.to_string(), highlight);
+                            }
                         }
                     }
-
-                    // Similar handling for bg, sp, and fmt
-
-                    api::set_hl(0, group_name, &opts.build())?;
                 }
             }
+
+            // Use merge_highlights to apply the user-defined highlights
+            merge_highlights(&highlight_map)?;
         }
     }
 
