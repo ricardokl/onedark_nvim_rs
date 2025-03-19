@@ -3,8 +3,8 @@ use nvim_oxi::{api, Result};
 use crate::{get_global_config, palette::ColorPalette};
 
 pub fn setup() -> Result<()> {
-    let cfg = get_global_config::<ColorPalette>().unwrap_or_default();
-    let c: ColorPalette = cfg.colors.unwrap_or_default();
+    let cfg = get_global_config().unwrap_or_default();
+    let c: ColorPalette = crate::palette::merge_palletes();
     let set_term_colors: bool = cfg.term_colors;
 
     if !set_term_colors {

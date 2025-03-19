@@ -264,9 +264,45 @@ pub fn get_palette(style: OneDarkStyle) -> ColorPalette {
     }
 }
 
+pub fn merge_palletes() -> ColorPalette {
+    let def_palette = ColorPalette::default();
+    let new_colors = get_global_config()
+        .unwrap_or_default()
+        .colors
+        .unwrap_or_default();
+    ColorPalette {
+        black: new_colors.black.unwrap_or(def_palette.black),
+        bg0: new_colors.bg0.unwrap_or(def_palette.bg0),
+        bg1: new_colors.bg1.unwrap_or(def_palette.bg1),
+        bg2: new_colors.bg2.unwrap_or(def_palette.bg2),
+        bg3: new_colors.bg3.unwrap_or(def_palette.bg3),
+        bg_d: new_colors.bg_d.unwrap_or(def_palette.bg_d),
+        bg_blue: new_colors.bg_blue.unwrap_or(def_palette.bg_blue),
+        bg_yellow: new_colors.bg_yellow.unwrap_or(def_palette.bg_yellow),
+        fg: new_colors.fg.unwrap_or(def_palette.fg),
+        purple: new_colors.purple.unwrap_or(def_palette.purple),
+        green: new_colors.green.unwrap_or(def_palette.green),
+        orange: new_colors.orange.unwrap_or(def_palette.orange),
+        blue: new_colors.blue.unwrap_or(def_palette.blue),
+        yellow: new_colors.yellow.unwrap_or(def_palette.yellow),
+        cyan: new_colors.cyan.unwrap_or(def_palette.cyan),
+        red: new_colors.red.unwrap_or(def_palette.red),
+        grey: new_colors.grey.unwrap_or(def_palette.grey),
+        light_grey: new_colors.light_grey.unwrap_or(def_palette.light_grey),
+        dark_cyan: new_colors.dark_cyan.unwrap_or(def_palette.dark_cyan),
+        dark_red: new_colors.dark_red.unwrap_or(def_palette.dark_red),
+        dark_yellow: new_colors.dark_yellow.unwrap_or(def_palette.dark_yellow),
+        dark_purple: new_colors.dark_purple.unwrap_or(def_palette.dark_purple),
+        diff_add: new_colors.diff_add.unwrap_or(def_palette.diff_add),
+        diff_delete: new_colors.diff_delete.unwrap_or(def_palette.diff_delete),
+        diff_change: new_colors.diff_change.unwrap_or(def_palette.diff_change),
+        diff_text: new_colors.diff_text.unwrap_or(def_palette.diff_text),
+    }
+}
+
 impl Default for ColorPalette {
     fn default() -> Self {
-        if let Ok(config) = get_global_config::<ConfigColorPalette>() {
+        if let Ok(config) = get_global_config() {
             let style = config.style;
             get_palette(style)
         } else {

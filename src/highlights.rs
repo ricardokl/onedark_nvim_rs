@@ -5,11 +5,7 @@ use nvim_oxi::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{
-    get_global_config,
-    palette::{ColorPalette, ConfigColorPalette},
-    util,
-};
+use crate::{get_global_config, util};
 
 // Highlight group structure
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -88,8 +84,8 @@ pub struct ConfigHighlights {
 
 impl Default for Highlights {
     fn default() -> Self {
-        let config = get_global_config::<ColorPalette>().unwrap_or_default();
-        let palette = config.colors.unwrap_or_default();
+        let config = get_global_config().unwrap_or_default();
+        let palette = crate::palette::merge_palletes();
 
         let mut hl = Highlights {
             common: HashMap::new(),
@@ -1105,10 +1101,7 @@ impl Default for Highlights {
             cmp_highlights.insert(
                 format!("CmpItemKind{}", kind),
                 HighlightGroup::new().fg(color).fmt(
-                    if get_global_config::<ConfigColorPalette>()
-                        .unwrap_or_default()
-                        .cmp_itemkind_reverse
-                    {
+                    if get_global_config().unwrap_or_default().cmp_itemkind_reverse {
                         "reverse"
                     } else {
                         "none"
@@ -1848,7 +1841,7 @@ pub fn setup() -> Result<()> {
         vim_highlights(group)?;
     }
 
-    let config = get_global_config::<ColorPalette>().unwrap_or_default();
+    let config = get_global_config().unwrap_or_default();
     // Apply user-defined highlights
     if let Some(highlights) = config.highlights {
         if let Some(common) = &highlights.common {
