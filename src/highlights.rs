@@ -89,6 +89,17 @@ impl Default for Highlights {
             langs: HashMap::new(),
         };
 
+        let common_float_border = HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1);
+        let common_normal_float = HighlightGroup::new().fg(&palette.fg).bg(&palette.bg1);
+        let common_added = HighlightGroup::new().fg(&palette.green);
+        let common_removed = HighlightGroup::new().fg(&palette.red);
+        let common_diff_delete = HighlightGroup::new().fg("none").bg(&palette.diff_delete);
+        let common_diff_text = HighlightGroup::new().fg("none").bg(&palette.diff_text);
+        let common_diff_add = HighlightGroup::new().fg("none").bg(&palette.diff_add);
+        let common_diff_change = HighlightGroup::new().fg("none").bg(&palette.diff_change);
+        let common_inc_search = HighlightGroup::new().fg(&palette.bg0).bg(&palette.orange);
+        let common_directory = HighlightGroup::new().fg(&palette.blue);
+
         // Common highlights
         hl.common = HashMap::from([
             (
@@ -188,34 +199,16 @@ impl Default for Highlights {
                 "Conceal".to_string(),
                 HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
             ),
-            (
-                "Added".to_string(),
-                HighlightGroup::new().fg(&palette.green),
-            ),
-            (
-                "Removed".to_string(),
-                HighlightGroup::new().fg(&palette.red),
-            ),
+            ("Added".to_string(), common_added.clone()),
+            ("Removed".to_string(), common_removed.clone()),
             (
                 "Changed".to_string(),
                 HighlightGroup::new().fg(&palette.blue),
             ),
-            (
-                "DiffAdd".to_string(),
-                HighlightGroup::new().fg("none").bg(&palette.diff_add),
-            ),
-            (
-                "DiffChange".to_string(),
-                HighlightGroup::new().fg("none").bg(&palette.diff_change),
-            ),
-            (
-                "DiffDelete".to_string(),
-                HighlightGroup::new().fg("none").bg(&palette.diff_delete),
-            ),
-            (
-                "DiffText".to_string(),
-                HighlightGroup::new().fg("none").bg(&palette.diff_text),
-            ),
+            ("DiffAdd".to_string(), common_diff_add.clone()),
+            ("DiffChange".to_string(), common_diff_change.clone()),
+            ("DiffDelete".to_string(), common_diff_delete.clone()),
+            ("DiffText".to_string(), common_diff_text.clone()),
             (
                 "DiffAdded".to_string(),
                 HighlightGroup::new().fg(&palette.green),
@@ -240,10 +233,7 @@ impl Default for Highlights {
                 "DiffIndexLine".to_string(),
                 HighlightGroup::new().fg(&palette.grey),
             ),
-            (
-                "Directory".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
-            ),
+            ("Directory".to_string(), common_directory.clone()),
             (
                 "ErrorMsg".to_string(),
                 HighlightGroup::new().fg(&palette.red).fmt("bold"),
@@ -260,10 +250,7 @@ impl Default for Highlights {
                 "CurSearch".to_string(),
                 HighlightGroup::new().fg(&palette.bg0).bg(&palette.orange),
             ),
-            (
-                "IncSearch".to_string(),
-                HighlightGroup::new().fg(&palette.bg0).bg(&palette.orange),
-            ),
+            ("IncSearch".to_string(), common_inc_search.clone()),
             (
                 "Search".to_string(),
                 HighlightGroup::new()
@@ -402,15 +389,16 @@ impl Default for Highlights {
                 "ToolbarButton".to_string(),
                 HighlightGroup::new().fg(&palette.bg0).bg(&palette.bg_blue),
             ),
-            (
-                "FloatBorder".to_string(),
-                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
-            ),
-            (
-                "NormalFloat".to_string(),
-                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg1),
-            ),
+            ("FloatBorder".to_string(), common_float_border.clone()),
+            ("NormalFloat".to_string(), common_normal_float.clone()),
         ]);
+
+        let syntax_comment = HighlightGroup::new()
+            .fg(&palette.grey)
+            .fmt(&config.code_style.comments.clone());
+        let syntax_title = HighlightGroup::new().fg(&palette.cyan);
+        let syntax_special = HighlightGroup::new().fg(&palette.red);
+        let syntax_delimiter = HighlightGroup::new().fg(&palette.light_grey);
 
         // Syntax highlights
         hl.syntax = HashMap::from([
@@ -513,10 +501,7 @@ impl Default for Highlights {
                 "Label".to_string(),
                 HighlightGroup::new().fg(&palette.purple),
             ),
-            (
-                "Special".to_string(),
-                HighlightGroup::new().fg(&palette.red),
-            ),
+            ("Special".to_string(), syntax_special.clone()),
             (
                 "SpecialChar".to_string(),
                 HighlightGroup::new().fg(&palette.red),
@@ -531,18 +516,10 @@ impl Default for Highlights {
                 "Operator".to_string(),
                 HighlightGroup::new().fg(&palette.purple),
             ),
-            ("Title".to_string(), HighlightGroup::new().fg(&palette.cyan)),
+            ("Title".to_string(), syntax_title.clone()),
             ("Tag".to_string(), HighlightGroup::new().fg(&palette.green)),
-            (
-                "Delimiter".to_string(),
-                HighlightGroup::new().fg(&palette.light_grey),
-            ),
-            (
-                "Comment".to_string(),
-                HighlightGroup::new()
-                    .fg(&palette.grey)
-                    .fmt(&config.code_style.comments.clone()),
-            ),
+            ("Delimiter".to_string(), syntax_delimiter.clone()),
+            ("Comment".to_string(), syntax_comment.clone()),
             (
                 "SpecialComment".to_string(),
                 HighlightGroup::new()
@@ -971,13 +948,22 @@ impl Default for Highlights {
                 "LspCodeLensSeparator".to_string(),
                 HighlightGroup::new().fg(&palette.grey),
             ),
-            ("LspDiagnosticsDefaultError".to_string(), diagnostic_error),
-            ("LspDiagnosticsDefaultHint".to_string(), diagnostic_hint),
+            (
+                "LspDiagnosticsDefaultError".to_string(),
+                diagnostic_error.clone(),
+            ),
+            (
+                "LspDiagnosticsDefaultHint".to_string(),
+                diagnostic_hint.clone(),
+            ),
             (
                 "LspDiagnosticsDefaultInformation".to_string(),
-                diagnostic_info,
+                diagnostic_info.clone(),
             ),
-            ("LspDiagnosticsDefaultWarning".to_string(), diagnostic_warn),
+            (
+                "LspDiagnosticsDefaultWarning".to_string(),
+                diagnostic_warn.clone(),
+            ),
             (
                 "LspDiagnosticsUnderlineError".to_string(),
                 diagnostic_underline_error,
@@ -1348,6 +1334,396 @@ impl Default for Highlights {
         ]);
 
         plugins.insert("telescope".to_string(), telescope_highlights);
+
+        let mini = HashMap::from([
+            (
+                "MiniAnimateCursor".to_string(),
+                HighlightGroup::new().fmt("reverse,nocombine"),
+            ),
+            (
+                "MiniAnimateNormalFloat".to_string(),
+                common_normal_float.clone(),
+            ),
+            ("MiniClueBorder".to_string(), common_float_border.clone()),
+            ("MiniClueDescGroup".to_string(), diagnostic_warn.clone()),
+            (
+                "MiniClueDescSingle".to_string(),
+                common_normal_float.clone(),
+            ),
+            ("MiniClueNextKey".to_string(), diagnostic_hint.clone()),
+            (
+                "MiniClueNextKeyWithPostkeys".to_string(),
+                diagnostic_error.clone(),
+            ),
+            ("MiniClueSeparator".to_string(), diagnostic_info.clone()),
+            (
+                "MiniClueTitle".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "MiniCompletionActiveParameter".to_string(),
+                HighlightGroup::new().fmt("underline"),
+            ),
+            (
+                "MiniCursorword".to_string(),
+                HighlightGroup::new().fmt("underline"),
+            ),
+            (
+                "MiniCursorwordCurrent".to_string(),
+                HighlightGroup::new().fmt("underline"),
+            ),
+            ("MiniDepsChangeAdded".to_string(), common_added),
+            ("MiniDepsChangeRemoved".to_string(), common_removed),
+            ("MiniDepsHint".to_string(), diagnostic_hint.clone()),
+            ("MiniDepsInfo".to_string(), diagnostic_info.clone()),
+            ("MiniDepsMsgBreaking".to_string(), diagnostic_warn.clone()),
+            ("MiniDepsPlaceholder".to_string(), syntax_comment.clone()),
+            ("MiniDepsTitle".to_string(), syntax_title.clone()),
+            ("MiniDepsTitleError".to_string(), common_diff_delete.clone()),
+            ("MiniDepsTitleSame".to_string(), common_diff_text.clone()),
+            ("MiniDepsTitleUpdate".to_string(), common_diff_add.clone()),
+            (
+                "MiniDiffSignAdd".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "MiniDiffSignChange".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "MiniDiffSignDelete".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            ("MiniDiffOverAdd".to_string(), common_diff_add),
+            ("MiniDiffOverChange".to_string(), common_diff_text),
+            ("MiniDiffOverContext".to_string(), common_diff_change),
+            ("MiniDiffOverDelete".to_string(), common_diff_delete),
+            ("MiniFilesBorder".to_string(), common_float_border.clone()),
+            (
+                "MiniFilesBorderModified".to_string(),
+                diagnostic_warn.clone(),
+            ),
+            (
+                "MiniFilesCursorLine".to_string(),
+                HighlightGroup::new().bg(&palette.bg2),
+            ),
+            ("MiniFilesDirectory".to_string(), common_directory.clone()),
+            (
+                "MiniFilesFile".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            ("MiniFilesNormal".to_string(), common_normal_float.clone()),
+            (
+                "MiniFilesTitle".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "MiniFilesTitleFocused".to_string(),
+                HighlightGroup::new().fg(&palette.cyan).fmt("bold"),
+            ),
+            (
+                "MiniHipatternsFixme".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.bg0)
+                    .bg(&palette.red)
+                    .fmt("bold"),
+            ),
+            (
+                "MiniHipatternsHack".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.bg0)
+                    .bg(&palette.yellow)
+                    .fmt("bold"),
+            ),
+            (
+                "MiniHipatternsNote".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.bg0)
+                    .bg(&palette.cyan)
+                    .fmt("bold"),
+            ),
+            (
+                "MiniHipatternsTodo".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.bg0)
+                    .bg(&palette.purple)
+                    .fmt("bold"),
+            ),
+            (
+                "MiniIconsAzure".to_string(),
+                HighlightGroup::new().fg(&palette.bg_blue),
+            ),
+            (
+                "MiniIconsBlue".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "MiniIconsCyan".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "MiniIconsGreen".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "MiniIconsGrey".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            (
+                "MiniIconsOrange".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "MiniIconsPurple".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "MiniIconsRed".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "MiniIconsYellow".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "MiniIndentscopeSymbol".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "MiniIndentscopePrefix".to_string(),
+                HighlightGroup::new().fmt("nocombine"),
+            ),
+            (
+                "MiniJump".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.purple)
+                    .fmt("underline")
+                    .sp(&palette.purple),
+            ),
+            (
+                "MiniJump2dDim".to_string(),
+                HighlightGroup::new().fg(&palette.grey).fmt("nocombine"),
+            ),
+            (
+                "MiniJump2dSpot".to_string(),
+                HighlightGroup::new().fg(&palette.red).fmt("bold,nocombine"),
+            ),
+            (
+                "MiniJump2dSpotAhead".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.cyan)
+                    .bg(&palette.bg0)
+                    .fmt("nocombine"),
+            ),
+            (
+                "MiniJump2dSpotUnique".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.yellow)
+                    .fmt("bold,nocombine"),
+            ),
+            ("MiniMapNormal".to_string(), common_normal_float.clone()),
+            ("MiniMapSymbolCount".to_string(), syntax_special.clone()),
+            ("MiniMapSymbolLine".to_string(), syntax_title.clone()),
+            ("MiniMapSymbolView".to_string(), syntax_delimiter.clone()),
+            ("MiniNotifyBorder".to_string(), common_float_border.clone()),
+            ("MiniNotifyNormal".to_string(), common_normal_float.clone()),
+            (
+                "MiniNotifyTitle".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "MiniOperatorsExchangeFrom".to_string(),
+                common_inc_search.clone(),
+            ),
+            ("MiniPickBorder".to_string(), common_float_border),
+            ("MiniPickBorderBusy".to_string(), diagnostic_warn),
+            (
+                "MiniPickBorderText".to_string(),
+                HighlightGroup::new().fg(&palette.cyan).fmt("bold"),
+            ),
+            ("MiniPickIconDirectory".to_string(), common_directory),
+            ("MiniPickIconFile".to_string(), common_normal_float.clone()),
+            ("MiniPickHeader".to_string(), diagnostic_hint.clone()),
+            (
+                "MiniPickMatchCurrent".to_string(),
+                HighlightGroup::new().bg(&palette.bg2),
+            ),
+            (
+                "MiniPickMatchMarked".to_string(),
+                HighlightGroup::new().bg(&palette.diff_text),
+            ),
+            ("MiniPickMatchRanges".to_string(), diagnostic_hint.clone()),
+            ("MiniPickNormal".to_string(), common_normal_float.clone()),
+            (
+                "MiniPickPreviewLine".to_string(),
+                HighlightGroup::new().bg(&palette.bg2),
+            ),
+            (
+                "MiniPickPreviewRegion".to_string(),
+                common_inc_search.clone(),
+            ),
+            ("MiniPickPrompt".to_string(), diagnostic_info),
+            (
+                "MiniStarterCurrent".to_string(),
+                HighlightGroup::new().fmt("nocombine"),
+            ),
+            (
+                "MiniStarterFooter".to_string(),
+                HighlightGroup::new().fg(&palette.dark_red).fmt("italic"),
+            ),
+            (
+                "MiniStarterHeader".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "MiniStarterInactive".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.grey)
+                    .fmt(&config.code_style.comments),
+            ),
+            (
+                "MiniStarterItem".to_string(),
+                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg0),
+            ),
+            (
+                "MiniStarterItemBullet".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "MiniStarterItemPrefix".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "MiniStarterSection".to_string(),
+                HighlightGroup::new().fg(&palette.light_grey),
+            ),
+            (
+                "MiniStarterQuery".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "MiniStatuslineDevinfo".to_string(),
+                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg2),
+            ),
+            (
+                "MiniStatuslineFileinfo".to_string(),
+                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg2),
+            ),
+            (
+                "MiniStatuslineFilename".to_string(),
+                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
+            ),
+            (
+                "MiniStatuslineInactive".to_string(),
+                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg0),
+            ),
+            (
+                "MiniStatuslineModeCommand".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.bg0)
+                    .bg(&palette.yellow)
+                    .fmt("bold"),
+            ),
+            (
+                "MiniStatuslineModeInsert".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.bg0)
+                    .bg(&palette.blue)
+                    .fmt("bold"),
+            ),
+            (
+                "MiniStatuslineModeNormal".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.bg0)
+                    .bg(&palette.green)
+                    .fmt("bold"),
+            ),
+            (
+                "MiniStatuslineModeOther".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.bg0)
+                    .bg(&palette.cyan)
+                    .fmt("bold"),
+            ),
+            (
+                "MiniStatuslineModeReplace".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.bg0)
+                    .bg(&palette.red)
+                    .fmt("bold"),
+            ),
+            (
+                "MiniStatuslineModeVisual".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.bg0)
+                    .bg(&palette.purple)
+                    .fmt("bold"),
+            ),
+            (
+                "MiniSurround".to_string(),
+                HighlightGroup::new().fg(&palette.bg0).bg(&palette.orange),
+            ),
+            (
+                "MiniTablineCurrent".to_string(),
+                HighlightGroup::new().fmt("bold"),
+            ),
+            (
+                "MiniTablineFill".to_string(),
+                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
+            ),
+            (
+                "MiniTablineHidden".to_string(),
+                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg1),
+            ),
+            (
+                "MiniTablineModifiedCurrent".to_string(),
+                HighlightGroup::new().fg(&palette.orange).fmt("bold,italic"),
+            ),
+            (
+                "MiniTablineModifiedHidden".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.light_grey)
+                    .bg(&palette.bg1)
+                    .fmt("italic"),
+            ),
+            (
+                "MiniTablineModifiedVisible".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.yellow)
+                    .bg(&palette.bg0)
+                    .fmt("italic"),
+            ),
+            (
+                "MiniTablineTabpagesection".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.bg0)
+                    .bg(&palette.bg_yellow),
+            ),
+            (
+                "MiniTablineVisible".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.light_grey)
+                    .bg(&palette.bg0),
+            ),
+            (
+                "MiniTestEmphasis".to_string(),
+                HighlightGroup::new().fmt("bold"),
+            ),
+            (
+                "MiniTestFail".to_string(),
+                HighlightGroup::new().fg(&palette.red).fmt("bold"),
+            ),
+            (
+                "MiniTestPass".to_string(),
+                HighlightGroup::new().fg(&palette.green).fmt("bold"),
+            ),
+            (
+                "MiniTrailspace".to_string(),
+                HighlightGroup::new().bg(&palette.red),
+            ),
+        ]);
+
+        plugins.insert("mini".to_string(), mini);
 
         // Language specific highlights
         let mut langs = HashMap::new();
