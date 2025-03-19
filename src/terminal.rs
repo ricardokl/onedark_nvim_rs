@@ -4,7 +4,7 @@ use crate::{get_global_config, palette::ColorPalette};
 
 pub fn setup() -> Result<()> {
     let cfg = get_global_config::<ColorPalette>().unwrap_or_default();
-    let c: ColorPalette = cfg.colors;
+    let c: ColorPalette = cfg.colors.unwrap_or_default();
     let set_term_colors: bool = cfg.term_colors;
 
     if !set_term_colors {

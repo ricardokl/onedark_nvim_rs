@@ -32,32 +32,28 @@ impl Default for HighlightGroup {
 }
 
 impl HighlightGroup {
-    pub fn fg(fg: &str) -> Self {
-        HighlightGroup {
-            fg: fg.to_string(),
-            ..Default::default()
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    pub fn bg(bg: &str) -> Self {
-        HighlightGroup {
-            bg: bg.to_string(),
-            ..Default::default()
-        }
+    pub fn fg(mut self, fg: &str) -> Self {
+        self.fg = fg.to_string();
+        self
     }
 
-    pub fn sp(sp: &str) -> Self {
-        HighlightGroup {
-            sp: sp.to_string(),
-            ..Default::default()
-        }
+    pub fn bg(mut self, bg: &str) -> Self {
+        self.bg = bg.to_string();
+        self
     }
 
-    pub fn fmt(fmt: &str) -> Self {
-        HighlightGroup {
-            fmt: fmt.to_string(),
-            ..Default::default()
-        }
+    pub fn sp(mut self, sp: &str) -> Self {
+        self.sp = sp.to_string();
+        self
+    }
+
+    pub fn fmt(mut self, fmt: &str) -> Self {
+        self.fmt = fmt.to_string();
+        self
     }
 }
 
@@ -93,7 +89,7 @@ pub struct ConfigHighlights {
 impl Default for Highlights {
     fn default() -> Self {
         let config = get_global_config::<ColorPalette>().unwrap_or_default();
-        let palette = config.colors;
+        let palette = config.colors.unwrap_or_default();
 
         let mut hl = Highlights {
             common: HashMap::new(),
@@ -108,215 +104,726 @@ impl Default for Highlights {
         hl.common = HashMap::from([
             (
                 "Normal".to_string(),
-                HighlightGroup {
-                    fg: palette.fg.clone(),
-                    bg: if config.transparent {
-                        "none".to_string()
+                HighlightGroup::new()
+                    .fg(&palette.fg)
+                    .bg(if config.transparent {
+                        "none"
                     } else {
-                        palette.bg0.clone()
-                    },
-                    ..Default::default()
-                },
+                        &palette.bg0
+                    }),
             ),
             (
                 "Terminal".to_string(),
-                HighlightGroup {
-                    fg: palette.fg.clone(),
-                    bg: if config.transparent {
-                        "none".to_string()
+                HighlightGroup::new()
+                    .fg(&palette.fg)
+                    .bg(if config.transparent {
+                        "none"
                     } else {
-                        palette.bg0.clone()
-                    },
-                    ..Default::default()
-                },
+                        &palette.bg0
+                    }),
             ),
             (
                 "EndOfBuffer".to_string(),
-                HighlightGroup {
-                    fg: if config.ending_tildes {
-                        palette.bg2.clone()
+                HighlightGroup::new()
+                    .fg(if config.ending_tildes {
+                        &palette.bg2
                     } else {
-                        palette.bg0.clone()
-                    },
-                    bg: if config.transparent {
-                        "none".to_string()
+                        &palette.bg0
+                    })
+                    .bg(if config.transparent {
+                        "none"
                     } else {
-                        palette.bg0.clone()
-                    },
-                    ..Default::default()
-                },
+                        &palette.bg0
+                    }),
             ),
             (
                 "FoldColumn".to_string(),
-                HighlightGroup {
-                    fg: palette.fg.clone(),
-                    bg: if config.transparent {
-                        "none".to_string()
+                HighlightGroup::new()
+                    .fg(&palette.fg)
+                    .bg(if config.transparent {
+                        "none"
                     } else {
-                        palette.bg1.clone()
-                    },
-                    ..Default::default()
-                },
+                        &palette.bg1
+                    }),
             ),
             (
                 "Folded".to_string(),
-                HighlightGroup {
-                    fg: palette.fg.clone(),
-                    bg: if config.transparent {
-                        "none".to_string()
+                HighlightGroup::new()
+                    .fg(&palette.fg)
+                    .bg(if config.transparent {
+                        "none"
                     } else {
-                        palette.bg1.clone()
-                    },
-                    ..Default::default()
-                },
+                        &palette.bg1
+                    }),
             ),
             (
                 "SignColumn".to_string(),
-                HighlightGroup {
-                    fg: palette.fg.clone(),
-                    bg: if config.transparent {
-                        "none".to_string()
+                HighlightGroup::new()
+                    .fg(&palette.fg)
+                    .bg(if config.transparent {
+                        "none"
                     } else {
-                        palette.bg0.clone()
-                    },
-                    ..Default::default()
-                },
+                        &palette.bg0
+                    }),
             ),
             (
                 "ToolbarLine".to_string(),
-                HighlightGroup {
-                    fg: palette.fg.clone(),
-                    ..Default::default()
-                },
+                HighlightGroup::new().fg(&palette.fg),
             ),
-            (
-                "Cursor".to_string(),
-                HighlightGroup {
-                    fmt: "reverse".to_string(),
-                    ..Default::default()
-                },
-            ),
-            (
-                "vCursor".to_string(),
-                HighlightGroup {
-                    fmt: "reverse".to_string(),
-                    ..Default::default()
-                },
-            ),
-            (
-                "iCursor".to_string(),
-                HighlightGroup {
-                    fmt: "reverse".to_string(),
-                    ..Default::default()
-                },
-            ),
-            (
-                "lCursor".to_string(),
-                HighlightGroup {
-                    fmt: "reverse".to_string(),
-                    ..Default::default()
-                },
-            ),
-            (
-                "CursorIM".to_string(),
-                HighlightGroup {
-                    fmt: "reverse".to_string(),
-                    ..Default::default()
-                },
-            ),
+            ("Cursor".to_string(), HighlightGroup::new().fmt("reverse")),
+            ("vCursor".to_string(), HighlightGroup::new().fmt("reverse")),
+            ("iCursor".to_string(), HighlightGroup::new().fmt("reverse")),
+            ("lCursor".to_string(), HighlightGroup::new().fmt("reverse")),
+            ("CursorIM".to_string(), HighlightGroup::new().fmt("reverse")),
             (
                 "CursorColumn".to_string(),
-                HighlightGroup {
-                    bg: palette.bg1.clone(),
-                    ..Default::default()
-                },
+                HighlightGroup::new().bg(&palette.bg1),
             ),
             (
                 "CursorLine".to_string(),
-                HighlightGroup {
-                    bg: palette.bg1.clone(),
-                    ..Default::default()
-                },
+                HighlightGroup::new().bg(&palette.bg1),
             ),
             (
                 "ColorColumn".to_string(),
-                HighlightGroup {
-                    bg: palette.bg1.clone(),
-                    ..Default::default()
-                },
+                HighlightGroup::new().bg(&palette.bg1),
             ),
             (
                 "CursorLineNr".to_string(),
-                HighlightGroup {
-                    fg: palette.fg.clone(),
-                    ..Default::default()
-                },
+                HighlightGroup::new().fg(&palette.fg),
             ),
             (
                 "LineNr".to_string(),
-                HighlightGroup {
-                    fg: palette.grey.clone(),
-                    ..Default::default()
-                },
+                HighlightGroup::new().fg(&palette.grey),
             ),
-            // Add more common highlights as needed
+            (
+                "Conceal".to_string(),
+                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
+            ),
+            (
+                "Added".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "Removed".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "Changed".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "DiffAdd".to_string(),
+                HighlightGroup::new().fg("none").bg(&palette.diff_add),
+            ),
+            (
+                "DiffChange".to_string(),
+                HighlightGroup::new().fg("none").bg(&palette.diff_change),
+            ),
+            (
+                "DiffDelete".to_string(),
+                HighlightGroup::new().fg("none").bg(&palette.diff_delete),
+            ),
+            (
+                "DiffText".to_string(),
+                HighlightGroup::new().fg("none").bg(&palette.diff_text),
+            ),
+            (
+                "DiffAdded".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "DiffChanged".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "DiffRemoved".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "DiffDeleted".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "DiffFile".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "DiffIndexLine".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "Directory".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "ErrorMsg".to_string(),
+                HighlightGroup::new().fg(&palette.red).fmt("bold"),
+            ),
+            (
+                "WarningMsg".to_string(),
+                HighlightGroup::new().fg(&palette.yellow).fmt("bold"),
+            ),
+            (
+                "MoreMsg".to_string(),
+                HighlightGroup::new().fg(&palette.blue).fmt("bold"),
+            ),
+            (
+                "CurSearch".to_string(),
+                HighlightGroup::new().fg(&palette.bg0).bg(&palette.orange),
+            ),
+            (
+                "IncSearch".to_string(),
+                HighlightGroup::new().fg(&palette.bg0).bg(&palette.orange),
+            ),
+            (
+                "Search".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.bg0)
+                    .bg(&palette.bg_yellow),
+            ),
+            (
+                "Substitute".to_string(),
+                HighlightGroup::new().fg(&palette.bg0).bg(&palette.green),
+            ),
+            (
+                "MatchParen".to_string(),
+                HighlightGroup::new().fg("none").bg(&palette.grey),
+            ),
+            (
+                "NonText".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "Whitespace".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "SpecialKey".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "Pmenu".to_string(),
+                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg1),
+            ),
+            (
+                "PmenuSbar".to_string(),
+                HighlightGroup::new().fg("none").bg(&palette.bg1),
+            ),
+            (
+                "PmenuSel".to_string(),
+                HighlightGroup::new().fg(&palette.bg0).bg(&palette.bg_blue),
+            ),
+            (
+                "WildMenu".to_string(),
+                HighlightGroup::new().fg(&palette.bg0).bg(&palette.blue),
+            ),
+            (
+                "PmenuThumb".to_string(),
+                HighlightGroup::new().fg("none").bg(&palette.grey),
+            ),
+            (
+                "Question".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "SpellBad".to_string(),
+                HighlightGroup::new()
+                    .fg("none")
+                    .fmt("undercurl")
+                    .sp(&palette.red),
+            ),
+            (
+                "SpellCap".to_string(),
+                HighlightGroup::new()
+                    .fg("none")
+                    .fmt("undercurl")
+                    .sp(&palette.yellow),
+            ),
+            (
+                "SpellLocal".to_string(),
+                HighlightGroup::new()
+                    .fg("none")
+                    .fmt("undercurl")
+                    .sp(&palette.blue),
+            ),
+            (
+                "SpellRare".to_string(),
+                HighlightGroup::new()
+                    .fg("none")
+                    .fmt("undercurl")
+                    .sp(&palette.purple),
+            ),
+            (
+                "StatusLine".to_string(),
+                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg2),
+            ),
+            (
+                "StatusLineTerm".to_string(),
+                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg2),
+            ),
+            (
+                "StatusLineNC".to_string(),
+                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
+            ),
+            (
+                "StatusLineTermNC".to_string(),
+                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
+            ),
+            (
+                "TabLine".to_string(),
+                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg1),
+            ),
+            (
+                "TabLineFill".to_string(),
+                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
+            ),
+            (
+                "TabLineSel".to_string(),
+                HighlightGroup::new().fg(&palette.bg0).bg(&palette.fg),
+            ),
+            (
+                "WinSeparator".to_string(),
+                HighlightGroup::new().fg(&palette.bg3),
+            ),
+            ("Visual".to_string(), HighlightGroup::new().bg(&palette.bg3)),
+            (
+                "VisualNOS".to_string(),
+                HighlightGroup::new()
+                    .fg("none")
+                    .bg(&palette.bg2)
+                    .fmt("underline"),
+            ),
+            (
+                "QuickFixLine".to_string(),
+                HighlightGroup::new().fg(&palette.blue).fmt("underline"),
+            ),
+            (
+                "Debug".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "debugPC".to_string(),
+                HighlightGroup::new().fg(&palette.bg0).bg(&palette.green),
+            ),
+            (
+                "debugBreakpoint".to_string(),
+                HighlightGroup::new().fg(&palette.bg0).bg(&palette.red),
+            ),
+            (
+                "ToolbarButton".to_string(),
+                HighlightGroup::new().fg(&palette.bg0).bg(&palette.bg_blue),
+            ),
+            (
+                "FloatBorder".to_string(),
+                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
+            ),
+            (
+                "NormalFloat".to_string(),
+                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg1),
+            ),
         ]);
 
         // Syntax highlights
         hl.syntax = HashMap::from([
             (
                 "String".to_string(),
-                HighlightGroup {
-                    fg: palette.green.clone(),
-                    fmt: config.code_style.strings.clone().into(),
-                    ..Default::default()
-                },
+                HighlightGroup::new()
+                    .fg(&palette.green)
+                    .fmt(&config.code_style.strings.clone()),
             ),
             (
                 "Character".to_string(),
-                HighlightGroup {
-                    fg: palette.orange.clone(),
-                    ..Default::default()
-                },
+                HighlightGroup::new().fg(&palette.orange),
             ),
             (
                 "Number".to_string(),
-                HighlightGroup {
-                    fg: palette.orange.clone(),
-                    ..Default::default()
-                },
+                HighlightGroup::new().fg(&palette.orange),
             ),
             (
                 "Float".to_string(),
-                HighlightGroup {
-                    fg: palette.orange.clone(),
-                    ..Default::default()
-                },
+                HighlightGroup::new().fg(&palette.orange),
             ),
             (
                 "Boolean".to_string(),
-                HighlightGroup {
-                    fg: palette.orange.clone(),
-                    ..Default::default()
-                },
+                HighlightGroup::new().fg(&palette.orange),
             ),
             (
                 "Type".to_string(),
-                HighlightGroup {
-                    fg: palette.yellow.clone(),
-                    ..Default::default()
-                },
+                HighlightGroup::new().fg(&palette.yellow),
             ),
-            // Add more syntax highlights as needed
+            (
+                "Structure".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "StorageClass".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "Identifier".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.red)
+                    .fmt(&config.code_style.variables.clone()),
+            ),
+            (
+                "Constant".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "PreProc".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "PreCondit".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "Include".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "Keyword".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.purple)
+                    .fmt(&config.code_style.keywords.clone()),
+            ),
+            (
+                "Define".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "Typedef".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "Exception".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "Conditional".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.purple)
+                    .fmt(&config.code_style.keywords.clone()),
+            ),
+            (
+                "Repeat".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.purple)
+                    .fmt(&config.code_style.keywords.clone()),
+            ),
+            (
+                "Statement".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            ("Macro".to_string(), HighlightGroup::new().fg(&palette.red)),
+            (
+                "Error".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "Label".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "Special".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "SpecialChar".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "Function".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.blue)
+                    .fmt(&config.code_style.functions.clone()),
+            ),
+            (
+                "Operator".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            ("Title".to_string(), HighlightGroup::new().fg(&palette.cyan)),
+            ("Tag".to_string(), HighlightGroup::new().fg(&palette.green)),
+            (
+                "Delimiter".to_string(),
+                HighlightGroup::new().fg(&palette.light_grey),
+            ),
+            (
+                "Comment".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.grey)
+                    .fmt(&config.code_style.comments.clone()),
+            ),
+            (
+                "SpecialComment".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.grey)
+                    .fmt(&config.code_style.comments.clone()),
+            ),
+            (
+                "Todo".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.red)
+                    .fmt(&config.code_style.comments.clone()),
+            ),
         ]);
 
         // TreeSitter highlights
-        hl.treesitter = HashMap::new();
+        hl.treesitter = HashMap::from([
+            (
+                "TSAnnotation".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            (
+                "TSAttribute".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "TSBoolean".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "TSCharacter".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "TSComment".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.grey)
+                    .fmt(&config.code_style.comments.clone()),
+            ),
+            (
+                "TSConditional".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.purple)
+                    .fmt(&config.code_style.keywords.clone()),
+            ),
+            (
+                "TSConstant".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "TSConstBuiltin".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "TSConstMacro".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "TSConstructor".to_string(),
+                HighlightGroup::new().fg(&palette.yellow).fmt("bold"),
+            ),
+            ("TSError".to_string(), HighlightGroup::new().fg(&palette.fg)),
+            (
+                "TSException".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "TSField".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "TSFloat".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "TSFunction".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.blue)
+                    .fmt(&config.code_style.functions.clone()),
+            ),
+            (
+                "TSFuncBuiltin".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.cyan)
+                    .fmt(&config.code_style.functions.clone()),
+            ),
+            (
+                "TSFuncMacro".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.cyan)
+                    .fmt(&config.code_style.functions.clone()),
+            ),
+            (
+                "TSInclude".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "TSKeyword".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.purple)
+                    .fmt(&config.code_style.keywords.clone()),
+            ),
+            (
+                "TSKeywordFunction".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.purple)
+                    .fmt(&config.code_style.functions.clone()),
+            ),
+            (
+                "TSKeywordOperator".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.purple)
+                    .fmt(&config.code_style.keywords.clone()),
+            ),
+            (
+                "TSLabel".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "TSMethod".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.blue)
+                    .fmt(&config.code_style.functions.clone()),
+            ),
+            (
+                "TSNamespace".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            ("TSNone".to_string(), HighlightGroup::new().fg(&palette.fg)),
+            (
+                "TSNumber".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "TSOperator".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            (
+                "TSParameter".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "TSParameterReference".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            (
+                "TSProperty".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "TSPunctDelimiter".to_string(),
+                HighlightGroup::new().fg(&palette.light_grey),
+            ),
+            (
+                "TSPunctBracket".to_string(),
+                HighlightGroup::new().fg(&palette.light_grey),
+            ),
+            (
+                "TSPunctSpecial".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "TSRepeat".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.purple)
+                    .fmt(&config.code_style.keywords.clone()),
+            ),
+            (
+                "TSString".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.green)
+                    .fmt(&config.code_style.strings.clone()),
+            ),
+            (
+                "TSStringRegex".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.orange)
+                    .fmt(&config.code_style.strings.clone()),
+            ),
+            (
+                "TSStringEscape".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.red)
+                    .fmt(&config.code_style.strings.clone()),
+            ),
+            (
+                "TSSymbol".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "TSTag".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "TSTagDelimiter".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            ("TSText".to_string(), HighlightGroup::new().fg(&palette.fg)),
+            (
+                "TSStrong".to_string(),
+                HighlightGroup::new().fg(&palette.fg).fmt("bold"),
+            ),
+            (
+                "TSEmphasis".to_string(),
+                HighlightGroup::new().fg(&palette.fg).fmt("italic"),
+            ),
+            (
+                "TSUnderline".to_string(),
+                HighlightGroup::new().fg(&palette.fg).fmt("underline"),
+            ),
+            (
+                "TSStrike".to_string(),
+                HighlightGroup::new().fg(&palette.fg).fmt("strikethrough"),
+            ),
+            (
+                "TSTitle".to_string(),
+                HighlightGroup::new().fg(&palette.orange).fmt("bold"),
+            ),
+            (
+                "TSLiteral".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "TSURI".to_string(),
+                HighlightGroup::new().fg(&palette.cyan).fmt("underline"),
+            ),
+            ("TSMath".to_string(), HighlightGroup::new().fg(&palette.fg)),
+            (
+                "TSTextReference".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "TSEnvironment".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            (
+                "TSEnvironmentName".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            ("TSNote".to_string(), HighlightGroup::new().fg(&palette.fg)),
+            (
+                "TSWarning".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            (
+                "TSDanger".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            (
+                "TSType".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "TSTypeBuiltin".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "TSVariable".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.fg)
+                    .fmt(&config.code_style.variables.clone()),
+            ),
+            (
+                "TSVariableBuiltin".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.red)
+                    .fmt(&config.code_style.variables.clone()),
+            ),
+        ]);
 
-        // Plugin highlights
-        let mut lsp_plugin = HashMap::new();
-
-        // Diagnostics colors
+        // LSP plugin highlights
         let diagnostics_error_color = if config.diagnostics.darker {
             palette.dark_red.clone()
         } else {
@@ -341,89 +848,937 @@ impl Default for Highlights {
             palette.cyan.clone()
         };
 
-        // LSP plugin highlights
-        lsp_plugin.insert(
-            "DiagnosticError".to_string(),
-            HighlightGroup {
-                fg: palette.red.clone(),
-                ..Default::default()
-            },
-        );
+        let error_bg = if config.diagnostics.background {
+            match util::darken(&diagnostics_error_color, 0.1, Some(&palette.bg0)) {
+                Ok(color) => color,
+                Err(_) => "none".into(),
+            }
+        } else {
+            "none".into()
+        };
+        let warn_bg = if config.diagnostics.background {
+            match util::darken(&diagnostics_warn_color, 0.1, Some(&palette.bg0)) {
+                Ok(color) => color,
+                Err(_) => "none".into(),
+            }
+        } else {
+            "none".into()
+        };
+        let info_bg = if config.diagnostics.background {
+            match util::darken(&diagnostics_info_color, 0.1, Some(&palette.bg0)) {
+                Ok(color) => color,
+                Err(_) => "none".into(),
+            }
+        } else {
+            "none".into()
+        };
+        let hint_bg = if config.diagnostics.background {
+            match util::darken(&diagnostics_hint_color, 0.1, Some(&palette.bg0)) {
+                Ok(color) => color,
+                Err(_) => "none".into(),
+            }
+        } else {
+            "none".into()
+        };
 
-        lsp_plugin.insert(
-            "DiagnosticHint".to_string(),
-            HighlightGroup {
-                fg: palette.purple.clone(),
-                ..Default::default()
-            },
-        );
+        // Underline diagnostics
+        let underline_fmt = if config.diagnostics.undercurl {
+            "undercurl"
+        } else {
+            "underline"
+        };
 
-        lsp_plugin.insert(
-            "DiagnosticInfo".to_string(),
-            HighlightGroup {
-                fg: palette.cyan.clone(),
-                ..Default::default()
-            },
-        );
+        let diagnostic_error = HighlightGroup::new().fg(&palette.red);
+        let diagnostic_hint = HighlightGroup::new().fg(&palette.purple);
+        let diagnostic_info = HighlightGroup::new().fg(&palette.cyan);
+        let diagnostic_warn = HighlightGroup::new().fg(&palette.yellow);
+        let diagnostic_virtual_text_error = HighlightGroup::new()
+            .fg(&diagnostics_error_color)
+            .bg(&error_bg);
+        let diagnostic_virtual_text_warn = HighlightGroup::new()
+            .fg(&diagnostics_warn_color)
+            .bg(&warn_bg);
+        let diagnostic_virtual_text_info = HighlightGroup::new()
+            .fg(&diagnostics_info_color)
+            .bg(&info_bg);
+        let diagnostic_virtual_text_hint = HighlightGroup::new()
+            .fg(&diagnostics_hint_color)
+            .bg(&hint_bg);
+        let diagnostic_underline_error = HighlightGroup::new().fmt(underline_fmt).sp(&palette.red);
+        let diagnostic_underline_warn =
+            HighlightGroup::new().fmt(underline_fmt).sp(&palette.yellow);
+        let diagnostic_underline_info = HighlightGroup::new().fmt(underline_fmt).sp(&palette.blue);
+        let diagnostic_underline_hint =
+            HighlightGroup::new().fmt(underline_fmt).sp(&palette.purple);
 
-        lsp_plugin.insert(
-            "DiagnosticWarn".to_string(),
-            HighlightGroup {
-                fg: palette.yellow.clone(),
-                ..Default::default()
-            },
-        );
+        let lsp_plugin = HashMap::from([
+            (
+                "LspCxxHlGroupEnumConstant".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "LspCxxHlGroupMemberVariable".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "LspCxxHlGroupNamespace".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "LspCxxHlSkippedRegion".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "LspCxxHlSkippedRegionBeginEnd".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            ("DiagnosticError".to_string(), diagnostic_error.clone()),
+            ("DiagnosticHint".to_string(), diagnostic_hint.clone()),
+            ("DiagnosticInfo".to_string(), diagnostic_info.clone()),
+            ("DiagnosticWarn".to_string(), diagnostic_warn.clone()),
+            (
+                "DiagnosticVirtualTextError".to_string(),
+                diagnostic_virtual_text_error.clone(),
+            ),
+            (
+                "DiagnosticVirtualTextWarn".to_string(),
+                diagnostic_virtual_text_warn.clone(),
+            ),
+            (
+                "DiagnosticVirtualTextInfo".to_string(),
+                diagnostic_virtual_text_info.clone(),
+            ),
+            (
+                "DiagnosticVirtualTextHint".to_string(),
+                diagnostic_virtual_text_hint.clone(),
+            ),
+            (
+                "DiagnosticUnderlineInfo".to_string(),
+                diagnostic_virtual_text_info.clone(),
+            ),
+            (
+                "DiagnosticUnderlineWarn".to_string(),
+                diagnostic_virtual_text_warn.clone(),
+            ),
+            (
+                "LspReferenceText".to_string(),
+                HighlightGroup::new().bg(&palette.bg2),
+            ),
+            (
+                "LspReferenceWrite".to_string(),
+                HighlightGroup::new().bg(&palette.bg2),
+            ),
+            (
+                "LspReferenceRead".to_string(),
+                HighlightGroup::new().bg(&palette.bg2),
+            ),
+            (
+                "LspCodeLens".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.grey)
+                    .fmt(&config.code_style.comments),
+            ),
+            (
+                "LspCodeLensSeparator".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            ("LspDiagnosticsDefaultError".to_string(), diagnostic_error),
+            ("LspDiagnosticsDefaultHint".to_string(), diagnostic_hint),
+            (
+                "LspDiagnosticsDefaultInformation".to_string(),
+                diagnostic_info,
+            ),
+            ("LspDiagnosticsDefaultWarning".to_string(), diagnostic_warn),
+            (
+                "LspDiagnosticsUnderlineError".to_string(),
+                diagnostic_underline_error,
+            ),
+            (
+                "LspDiagnosticsUnderlineHint".to_string(),
+                diagnostic_underline_hint,
+            ),
+            (
+                "LspDiagnosticsUnderlineInformation".to_string(),
+                diagnostic_underline_info,
+            ),
+            (
+                "LspDiagnosticsUnderlineWarning".to_string(),
+                diagnostic_underline_warn,
+            ),
+            (
+                "LspDiagnosticsVirtualTextError".to_string(),
+                diagnostic_virtual_text_error,
+            ),
+            (
+                "LspDiagnosticsVirtualTextWarning".to_string(),
+                diagnostic_virtual_text_warn,
+            ),
+            (
+                "LspDiagnosticsVirtualTextInformation".to_string(),
+                diagnostic_virtual_text_info,
+            ),
+            (
+                "LspDiagnosticsVirtualTextHint".to_string(),
+                diagnostic_virtual_text_hint,
+            ),
+        ]);
 
-        // Virtual text diagnostics
-        lsp_plugin.insert(
-            "DiagnosticVirtualTextError".to_string(),
-            HighlightGroup {
-                fg: diagnostics_error_color.clone(),
-                bg: if config.diagnostics.background {
-                    match util::darken(&diagnostics_error_color, 0.1, Some(&palette.bg0)) {
-                        Ok(color) => color,
-                        Err(_) => "none".into(),
-                    }
-                } else {
-                    "none".into()
-                },
-                ..Default::default()
-            },
-        );
+        // Implement plugin highlight tables
+        let mut plugins = HashMap::new();
+        plugins.insert("lsp".to_string(), lsp_plugin);
 
-        // Add more plugin highlights as needed
-        hl.plugins.insert("lsp".to_string(), lsp_plugin);
+        let lsp_kind = HashMap::from([
+            ("Default", &palette.purple),
+            ("Array", &palette.yellow),
+            ("Boolean", &palette.orange),
+            ("Class", &palette.yellow),
+            ("Color", &palette.green),
+            ("Constant", &palette.orange),
+            ("Constructor", &palette.blue),
+            ("Enum", &palette.purple),
+            ("EnumMember", &palette.yellow),
+            ("Event", &palette.yellow),
+            ("Field", &palette.purple),
+            ("File", &palette.blue),
+            ("Folder", &palette.orange),
+            ("Function", &palette.blue),
+            ("Interface", &palette.green),
+            ("Key", &palette.cyan),
+            ("Keyword", &palette.cyan),
+            ("Method", &palette.blue),
+            ("Module", &palette.orange),
+            ("Namespace", &palette.red),
+            ("Null", &palette.grey),
+            ("Number", &palette.orange),
+            ("Object", &palette.red),
+            ("Operator", &palette.red),
+            ("Package", &palette.yellow),
+            ("Property", &palette.cyan),
+            ("Reference", &palette.orange),
+            ("Snippet", &palette.red),
+            ("String", &palette.green),
+            ("Struct", &palette.purple),
+            ("Text", &palette.light_grey),
+            ("TypeParameter", &palette.red),
+            ("Unit", &palette.green),
+            ("Value", &palette.orange),
+            ("Variable", &palette.purple),
+        ]);
 
-        // Language-specific highlights
-        let mut c_lang = HashMap::new();
-        c_lang.insert(
-            "cInclude".to_string(),
-            HighlightGroup {
-                fg: palette.blue.clone(),
-                ..Default::default()
-            },
-        );
+        // CMP plugin highlights
+        let mut cmp_highlights = HashMap::from([
+            (
+                "CmpItemAbbr".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            (
+                "CmpItemAbbrDeprecated".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.light_grey)
+                    .fmt("strikethrough"),
+            ),
+            (
+                "CmpItemAbbrMatch".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "CmpItemAbbrMatchFuzzy".to_string(),
+                HighlightGroup::new().fg(&palette.cyan).fmt("underline"),
+            ),
+            (
+                "CmpItemMenu".to_string(),
+                HighlightGroup::new().fg(&palette.light_grey),
+            ),
+            (
+                "CmpItemKind".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.purple)
+                    .fmt(if config.cmp_itemkind_reverse {
+                        "reverse"
+                    } else {
+                        "none"
+                    }),
+            ),
+        ]);
 
-        c_lang.insert(
-            "cStorageClass".to_string(),
-            HighlightGroup {
-                fg: palette.purple.clone(),
-                ..Default::default()
-            },
-        );
+        for (kind, color) in lsp_kind.iter() {
+            cmp_highlights.insert(
+                format!("CmpItemKind{}", kind),
+                HighlightGroup::new().fg(color).fmt(
+                    if get_global_config::<ConfigColorPalette>()
+                        .unwrap_or_default()
+                        .cmp_itemkind_reverse
+                    {
+                        "reverse"
+                    } else {
+                        "none"
+                    },
+                ),
+            );
+        }
 
-        // Add more C language highlights as needed
-        hl.langs.insert("c".to_string(), c_lang);
+        plugins.insert("cmp".to_string(), cmp_highlights);
+
+        // WhichKey plugin highlights
+        let whichkey_highlights = HashMap::from([
+            (
+                "WhichKey".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "WhichKeyDesc".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "WhichKeyGroup".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "WhichKeySeparator".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+        ]);
+
+        plugins.insert("whichkey".to_string(), whichkey_highlights);
+
+        // GitGutter plugin highlights
+        let gitgutter_highlights = HashMap::from([
+            (
+                "GitGutterAdd".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "GitGutterChange".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "GitGutterDelete".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+        ]);
+
+        plugins.insert("gitgutter".to_string(), gitgutter_highlights);
+
+        // DiffView plugin highlights
+        let diffview_highlights = HashMap::from([
+            (
+                "DiffviewFilePanelTitle".to_string(),
+                HighlightGroup::new().fg(&palette.blue).fmt("bold"),
+            ),
+            (
+                "DiffviewFilePanelCounter".to_string(),
+                HighlightGroup::new().fg(&palette.purple).fmt("bold"),
+            ),
+            (
+                "DiffviewFilePanelFileName".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            (
+                "DiffviewNormal".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.fg)
+                    .bg(if config.transparent {
+                        "none"
+                    } else {
+                        &palette.bg0
+                    }),
+            ),
+            (
+                "DiffviewCursorLine".to_string(),
+                HighlightGroup::new().bg(&palette.bg1),
+            ),
+            (
+                "DiffviewVertSplit".to_string(),
+                HighlightGroup::new().fg(&palette.bg3),
+            ),
+            (
+                "DiffviewSignColumn".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.fg)
+                    .bg(if config.transparent {
+                        "none"
+                    } else {
+                        &palette.bg0
+                    }),
+            ),
+            (
+                "DiffviewStatusLine".to_string(),
+                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg2),
+            ),
+            (
+                "DiffviewStatusLineNC".to_string(),
+                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
+            ),
+            (
+                "DiffviewEndOfBuffer".to_string(),
+                HighlightGroup::new()
+                    .fg(if config.ending_tildes {
+                        &palette.bg2
+                    } else {
+                        &palette.bg0
+                    })
+                    .bg(if config.transparent {
+                        "none"
+                    } else {
+                        &palette.bg0
+                    }),
+            ),
+            (
+                "DiffviewFilePanelRootPath".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "DiffviewFilePanelPath".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "DiffviewFilePanelInsertions".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "DiffviewFilePanelDeletions".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "DiffviewStatusAdded".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "DiffviewStatusUntracked".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "DiffviewStatusModified".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "DiffviewStatusRenamed".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "DiffviewStatusCopied".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "DiffviewStatusTypeChange".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "DiffviewStatusUnmerged".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "DiffviewStatusUnknown".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "DiffviewStatusDeleted".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "DiffviewStatusBroken".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+        ]);
+
+        plugins.insert("diffview".to_string(), diffview_highlights);
+
+        // GitSigns plugin highlights
+        let gitsigns_highlights = HashMap::from([
+            (
+                "GitSignsAdd".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "GitSignsAddLn".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "GitSignsAddNr".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "GitSignsChange".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "GitSignsChangeLn".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "GitSignsChangeNr".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "GitSignsDelete".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "GitSignsDeleteLn".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "GitSignsDeleteNr".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+        ]);
+
+        plugins.insert("gitsigns".to_string(), gitsigns_highlights);
+
+        // Telescope plugin highlights
+        let telescope_highlights = HashMap::from([
+            (
+                "TelescopeBorder".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "TelescopePromptBorder".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "TelescopeResultsBorder".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "TelescopePreviewBorder".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "TelescopeMatching".to_string(),
+                HighlightGroup::new().fg(&palette.orange).fmt("bold"),
+            ),
+            (
+                "TelescopePromptPrefix".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "TelescopeSelection".to_string(),
+                HighlightGroup::new().bg(&palette.bg2),
+            ),
+            (
+                "TelescopeSelectionCaret".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+        ]);
+
+        plugins.insert("telescope".to_string(), telescope_highlights);
+
+        // Language specific highlights
+        let mut langs = HashMap::new();
+
+        // C language highlights
+        let c_highlights = HashMap::from([
+            (
+                "cInclude".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "cStorageClass".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "cTypedef".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "cDefine".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "cTSInclude".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "cTSConstant".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "cTSConstMacro".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "cTSOperator".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+        ]);
+        langs.insert("c".to_string(), c_highlights);
+
+        // C++ language highlights
+        let cpp_highlights = HashMap::from([
+            (
+                "cppStatement".to_string(),
+                HighlightGroup::new().fg(&palette.purple).fmt("bold"),
+            ),
+            (
+                "cppTSInclude".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "cppTSConstant".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "cppTSConstMacro".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "cppTSOperator".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+        ]);
+        langs.insert("cpp".to_string(), cpp_highlights);
+
+        // Markdown language highlights
+        let markdown_highlights = HashMap::from([
+            (
+                "markdownBlockquote".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "markdownBold".to_string(),
+                HighlightGroup::new().fmt("bold"),
+            ),
+            (
+                "markdownBoldDelimiter".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "markdownCode".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "markdownCodeBlock".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "markdownCodeDelimiter".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "markdownH1".to_string(),
+                HighlightGroup::new().fg(&palette.red).fmt("bold"),
+            ),
+            (
+                "markdownH2".to_string(),
+                HighlightGroup::new().fg(&palette.purple).fmt("bold"),
+            ),
+            (
+                "markdownH3".to_string(),
+                HighlightGroup::new().fg(&palette.orange).fmt("bold"),
+            ),
+            (
+                "markdownH4".to_string(),
+                HighlightGroup::new().fg(&palette.red).fmt("bold"),
+            ),
+            (
+                "markdownH5".to_string(),
+                HighlightGroup::new().fg(&palette.purple).fmt("bold"),
+            ),
+            (
+                "markdownH6".to_string(),
+                HighlightGroup::new().fg(&palette.orange).fmt("bold"),
+            ),
+            (
+                "markdownHeadingDelimiter".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "markdownHeadingRule".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "markdownId".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "markdownIdDeclaration".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "markdownItalic".to_string(),
+                HighlightGroup::new().fmt("italic"),
+            ),
+            (
+                "markdownItalicDelimiter".to_string(),
+                HighlightGroup::new().fg(&palette.grey).fmt("italic"),
+            ),
+            (
+                "markdownLinkDelimiter".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "markdownLinkText".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "markdownLinkTextDelimiter".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "markdownListMarker".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "markdownOrderedListMarker".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "markdownRule".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "markdownUrl".to_string(),
+                HighlightGroup::new().fg(&palette.blue).fmt("underline"),
+            ),
+            (
+                "markdownUrlDelimiter".to_string(),
+                HighlightGroup::new().fg(&palette.grey),
+            ),
+            (
+                "markdownUrlTitleDelimiter".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+        ]);
+        langs.insert("markdown".to_string(), markdown_highlights);
+
+        // PHP language highlights
+        let php_highlights = HashMap::from([
+            (
+                "phpFunctions".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.fg)
+                    .fmt(&config.code_style.functions),
+            ),
+            (
+                "phpMethods".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "phpStructure".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "phpOperator".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "phpMemberSelector".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            (
+                "phpVarSelector".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.orange)
+                    .fmt(&config.code_style.variables),
+            ),
+            (
+                "phpIdentifier".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.orange)
+                    .fmt(&config.code_style.variables),
+            ),
+            (
+                "phpBoolean".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "phpNumber".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "phpHereDoc".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "phpNowDoc".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "phpSCKeyword".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.purple)
+                    .fmt(&config.code_style.keywords),
+            ),
+            (
+                "phpFCKeyword".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.purple)
+                    .fmt(&config.code_style.keywords),
+            ),
+            (
+                "phpRegion".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+        ]);
+        langs.insert("php".to_string(), php_highlights);
+
+        // Scala language highlights
+        let scala_highlights = HashMap::from([
+            (
+                "scalaNameDefinition".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            (
+                "scalaInterpolationBoundary".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "scalaInterpolation".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "scalaTypeOperator".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "scalaOperator".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "scalaKeywordModifier".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.red)
+                    .fmt(&config.code_style.keywords),
+            ),
+        ]);
+        langs.insert("scala".to_string(), scala_highlights);
+
+        // TeX language highlights
+        let tex_highlights = HashMap::from([
+            (
+                "latexTSInclude".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "latexTSFuncMacro".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.fg)
+                    .fmt(&config.code_style.functions),
+            ),
+            (
+                "latexTSEnvironment".to_string(),
+                HighlightGroup::new().fg(&palette.cyan).fmt("bold"),
+            ),
+            (
+                "latexTSEnvironmentName".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "texCmdEnv".to_string(),
+                HighlightGroup::new().fg(&palette.cyan),
+            ),
+            (
+                "texEnvArgName".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "latexTSTitle".to_string(),
+                HighlightGroup::new().fg(&palette.green),
+            ),
+            (
+                "latexTSType".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "latexTSMath".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "texMathZoneX".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "texMathZoneXX".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "texMathDelimZone".to_string(),
+                HighlightGroup::new().fg(&palette.light_grey),
+            ),
+            (
+                "texMathDelim".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "texMathOper".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "texCmd".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "texCmdPart".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "texCmdPackage".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "texPgfType".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+        ]);
+        langs.insert("tex".to_string(), tex_highlights);
+
+        // Vim language highlights
+        let vim_highlights = HashMap::from([
+            (
+                "vimOption".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "vimSetEqual".to_string(),
+                HighlightGroup::new().fg(&palette.yellow),
+            ),
+            (
+                "vimMap".to_string(),
+                HighlightGroup::new().fg(&palette.purple),
+            ),
+            (
+                "vimMapModKey".to_string(),
+                HighlightGroup::new().fg(&palette.orange),
+            ),
+            (
+                "vimNotation".to_string(),
+                HighlightGroup::new().fg(&palette.red),
+            ),
+            (
+                "vimMapLhs".to_string(),
+                HighlightGroup::new().fg(&palette.fg),
+            ),
+            (
+                "vimMapRhs".to_string(),
+                HighlightGroup::new().fg(&palette.blue),
+            ),
+            (
+                "vimVar".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.fg)
+                    .fmt(&config.code_style.variables),
+            ),
+            (
+                "vimCommentTitle".to_string(),
+                HighlightGroup::new()
+                    .fg(&palette.light_grey)
+                    .fmt(&config.code_style.comments),
+            ),
+        ]);
+        langs.insert("vim".to_string(), vim_highlights);
+
+        hl.langs = langs;
+        hl.plugins = plugins;
 
         hl
     }
 }
 
-impl Highlights {
-    pub fn new() -> Self {
-        Highlights::default()
-    }
-}
+//impl Highlights {
+//    pub fn new() -> Self {
+//        Highlights::default()
+//    }
+//}
 
 // Apply vim highlights
 fn vim_highlights(highlights: &HashMap<String, HighlightGroup>) -> Result<()> {
@@ -473,9 +1828,6 @@ fn merge_highlights(highlights: &HashMap<String, HighlightGroup>) -> Result<()> 
 
 // Setup function
 pub fn setup() -> Result<()> {
-    let config = get_global_config::<ColorPalette>().unwrap_or_default();
-    let palette = config.colors;
-
     // Initialize highlight groups
     let hl = Highlights::default();
 
@@ -496,110 +1848,30 @@ pub fn setup() -> Result<()> {
         vim_highlights(group)?;
     }
 
+    let config = get_global_config::<ColorPalette>().unwrap_or_default();
     // Apply user-defined highlights
-    if let Some(config) = get_global_config::<ConfigColorPalette>() {
-        if let Some(highlights) = config.highlights {
-            // Convert user highlights to a HashMap<String, HighlightGroup>
-            let mut highlight_map = HashMap::new();
-
-            // Use Object methods to iterate over the keys and values
-            if let Ok(keys) = highlights.keys() {
-                for key in keys {
-                    if let Ok(key_str) = key.as_str() {
-                        if let Ok(value) = highlights.get(key_str) {
-                            if let Ok(settings) = value.as_dictionary() {
-                                let mut highlight = HighlightGroup::default();
-
-                                if let Some(fg) = settings.get("fg").and_then(|f| f.as_str().ok()) {
-                                    let color = if fg.starts_with('$') {
-                                        let name = &fg[1..];
-                                        match name {
-                                            "fg" => Some(palette.fg.clone()),
-                                            "bg0" => Some(palette.bg0.clone()),
-                                            "red" => Some(palette.red.clone()),
-                                            // Add more color mappings as needed
-                                            _ => {
-                                                eprintln!(
-                                                    "onedark.nvim: unknown color \"{}\"",
-                                                    name
-                                                );
-                                                None
-                                            }
-                                        }
-                                    } else {
-                                        Some(fg.to_string())
-                                    };
-
-                                    if let Some(color) = color {
-                                        highlight.fg = color;
-                                    }
-                                }
-
-                                // Similar handling for bg, sp, and fmt
-                                if let Some(bg) = settings.get("bg").and_then(|b| b.as_str().ok()) {
-                                    let color = if bg.starts_with('$') {
-                                        let name = &bg[1..];
-                                        match name {
-                                            "fg" => Some(palette.fg.clone()),
-                                            "bg0" => Some(palette.bg0.clone()),
-                                            "red" => Some(palette.red.clone()),
-                                            // Add more color mappings as needed
-                                            _ => {
-                                                eprintln!(
-                                                    "onedark.nvim: unknown color \"{}\"",
-                                                    name
-                                                );
-                                                None
-                                            }
-                                        }
-                                    } else {
-                                        Some(bg.to_string())
-                                    };
-
-                                    if let Some(color) = color {
-                                        highlight.bg = color;
-                                    }
-                                }
-
-                                if let Some(sp) = settings.get("sp").and_then(|s| s.as_str().ok()) {
-                                    let color = if sp.starts_with('$') {
-                                        let name = &sp[1..];
-                                        match name {
-                                            "fg" => Some(palette.fg.clone()),
-                                            "bg0" => Some(palette.bg0.clone()),
-                                            "red" => Some(palette.red.clone()),
-                                            // Add more color mappings as needed
-                                            _ => {
-                                                eprintln!(
-                                                    "onedark.nvim: unknown color \"{}\"",
-                                                    name
-                                                );
-                                                None
-                                            }
-                                        }
-                                    } else {
-                                        Some(sp.to_string())
-                                    };
-
-                                    if let Some(color) = color {
-                                        highlight.sp = color;
-                                    }
-                                }
-
-                                if let Some(fmt) = settings.get("fmt").and_then(|f| f.as_str().ok())
-                                {
-                                    highlight.fmt = fmt.to_string();
-                                }
-
-                                highlight_map.insert(key_str.to_string(), highlight);
-                            }
-                        }
-                    }
-                }
+    if let Some(highlights) = config.highlights {
+        if let Some(common) = &highlights.common {
+            merge_highlights(common)?;
+        }
+        if let Some(syntax) = &highlights.syntax {
+            merge_highlights(syntax)?;
+        }
+        if let Some(treesitter) = &highlights.treesitter {
+            merge_highlights(treesitter)?;
+        }
+        if let Some(lsp) = &highlights.lsp {
+            merge_highlights(lsp)?;
+        }
+        if let Some(plugins) = &highlights.plugins {
+            for (_, group) in plugins {
+                merge_highlights(group)?;
             }
-
-            // Use merge_highlights to apply the user-defined highlights
-            merge_highlights(&highlight_map)?;
+        }
+        if let Some(langs) = &highlights.langs {
+            for (_, group) in langs {
+                merge_highlights(group)?;
+            }
         }
     }
 

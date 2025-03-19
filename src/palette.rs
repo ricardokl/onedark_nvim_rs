@@ -266,7 +266,7 @@ pub fn get_palette(style: OneDarkStyle) -> ColorPalette {
 
 impl Default for ColorPalette {
     fn default() -> Self {
-        if let Some(config) = get_global_config::<ConfigColorPalette>() {
+        if let Ok(config) = get_global_config::<ConfigColorPalette>() {
             let style = config.style;
             get_palette(style)
         } else {

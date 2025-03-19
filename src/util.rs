@@ -89,6 +89,7 @@ pub fn darken(hex: &str, amount: f32, bg: Option<&str>) -> Result<String, String
 ///
 /// # Returns
 /// * `Result<String, String>` - Lightened color as a hex string or an error message
+#[allow(dead_code)]
 pub fn lighten(hex: &str, amount: f32, fg: Option<&str>) -> Result<String, String> {
     let fg = fg.unwrap_or(DEFAULT_FG);
     blend(hex, fg, amount.abs())
