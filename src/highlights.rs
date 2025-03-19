@@ -54,8 +54,7 @@ impl HighlightGroup {
 }
 
 // Highlight collection structure
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(default)]
+#[derive(Clone, Debug)]
 pub struct Highlights {
     pub common: HashMap<String, HighlightGroup>,
     pub syntax: HashMap<String, HighlightGroup>,
@@ -68,17 +67,11 @@ pub struct Highlights {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(default)]
 pub struct ConfigHighlights {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub common: Option<HashMap<String, HighlightGroup>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub syntax: Option<HashMap<String, HighlightGroup>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub treesitter: Option<HashMap<String, HighlightGroup>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub lsp: Option<HashMap<String, HighlightGroup>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub plugins: Option<HashMap<String, HashMap<String, HighlightGroup>>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub langs: Option<HashMap<String, HashMap<String, HighlightGroup>>>,
 }
 
