@@ -1,11 +1,19 @@
-use nvim_oxi::{api, Result};
+use nvim_oxi::{api, api::Error::Other, Result};
 
-use crate::{get_global_config, palette::ColorPalette};
+use crate::{
+    palette::{merge_palletes, ColorPalette},
+    GLOBAL_CONFIG,
+};
 
 pub fn setup() -> Result<()> {
-    let cfg = get_global_config().unwrap_or_default();
-    let c: ColorPalette = crate::palette::merge_palletes();
-    let set_term_colors: bool = cfg.term_colors;
+    let c: ColorPalette = merge_palletes();
+    let set_term_colors;
+    {
+        set_term_colors = GLOBAL_CONFIG
+            .read()
+            .map_err(|e| Other(format!("{}", e)))?
+            .term_colors;
+    }
 
     if !set_term_colors {
         return Ok(());

@@ -1,845 +1,987 @@
 use nvim_oxi::{
-    api::{self, opts::SetHighlightOpts},
+    api::{self, opts::SetHighlightOpts, Error::Other},
     Result,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
-use crate::{get_global_config, util};
+use crate::{util, DiagnosticsConfig, OneDarkConfig, GLOBAL_CONFIG};
 
 // Highlight group structure
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HighlightGroup {
-    pub fg: String,
-    pub bg: String,
-    pub sp: String,
-    pub fmt: String,
+struct HighlightGroup<'a> {
+    fg: Cow<'a, str>,
+    bg: Cow<'a, str>,
+    sp: Cow<'a, str>,
+    fmt: Option<Vec<FmtType>>,
 }
 
-impl Default for HighlightGroup {
+#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum FmtType {
+    Bold,
+    Italic,
+    Underline,
+    Undercurl,
+    Reverse,
+    NoCombine,
+    StrikeThrough,
+}
+
+impl<'a> Default for HighlightGroup<'a> {
     fn default() -> Self {
         HighlightGroup {
             fg: "none".into(),
             bg: "none".into(),
             sp: "none".into(),
-            fmt: "none".into(),
+            fmt: None,
         }
     }
 }
 
-impl HighlightGroup {
-    pub fn new() -> Self {
+impl<'a> HighlightGroup<'a> {
+    fn new() -> Self {
         Self::default()
     }
 
-    pub fn fg(mut self, fg: &str) -> Self {
-        self.fg = fg.to_string();
+    fn fg(mut self, fg: Cow<'a, str>) -> Self {
+        self.fg = fg;
         self
     }
 
-    pub fn bg(mut self, bg: &str) -> Self {
-        self.bg = bg.to_string();
+    fn bg(mut self, bg: Cow<'a, str>) -> Self {
+        self.bg = bg;
         self
     }
 
-    pub fn sp(mut self, sp: &str) -> Self {
-        self.sp = sp.to_string();
+    fn sp(mut self, sp: Cow<'a, str>) -> Self {
+        self.sp = sp.into();
         self
     }
 
-    pub fn fmt(mut self, fmt: &str) -> Self {
-        self.fmt = fmt.to_string();
+    fn fmt<T: Into<Option<Vec<FmtType>>>>(mut self, fmt: T) -> Self {
+        self.fmt = fmt.into();
         self
     }
 }
 
 // Highlight collection structure
 #[derive(Clone, Debug)]
-pub struct Highlights {
-    pub common: HashMap<String, HighlightGroup>,
-    pub syntax: HashMap<String, HighlightGroup>,
-    pub treesitter: HashMap<String, HighlightGroup>,
-    pub lsp: Option<HashMap<String, HighlightGroup>>,
-    pub plugins: HashMap<String, HashMap<String, HighlightGroup>>,
-    pub langs: HashMap<String, HashMap<String, HighlightGroup>>,
+pub struct Highlights<'a> {
+    common: HashMap<Box<str>, HighlightGroup<'a>>,
+    syntax: HashMap<Box<str>, HighlightGroup<'a>>,
+    treesitter: HashMap<Box<str>, HighlightGroup<'a>>,
+    lsp: Option<HashMap<Box<str>, HighlightGroup<'a>>>,
+    plugins: HashMap<Box<str>, HashMap<Box<str>, HighlightGroup<'a>>>,
+    langs: HashMap<Box<str>, HashMap<Box<str>, HighlightGroup<'a>>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(default)]
-pub struct ConfigHighlights {
-    pub common: Option<HashMap<String, HighlightGroup>>,
-    pub syntax: Option<HashMap<String, HighlightGroup>>,
-    pub treesitter: Option<HashMap<String, HighlightGroup>>,
-    pub lsp: Option<HashMap<String, HighlightGroup>>,
-    pub plugins: Option<HashMap<String, HashMap<String, HighlightGroup>>>,
-    pub langs: Option<HashMap<String, HashMap<String, HighlightGroup>>>,
+pub struct ConfigHighlights<'a> {
+    common: Option<HashMap<Box<str>, HighlightGroup<'a>>>,
+    syntax: Option<HashMap<Box<str>, HighlightGroup<'a>>>,
+    treesitter: Option<HashMap<Box<str>, HighlightGroup<'a>>>,
+    lsp: Option<HashMap<Box<str>, HighlightGroup<'a>>>,
+    plugins: Option<HashMap<Box<str>, HashMap<Box<str>, HighlightGroup<'a>>>>,
+    langs: Option<HashMap<Box<str>, HashMap<Box<str>, HighlightGroup<'a>>>>,
 }
 
-impl Default for Highlights {
+impl<'a> Default for Highlights<'a> {
     fn default() -> Self {
-        let config = get_global_config().unwrap_or_default();
+        use FmtType::{Bold, Italic, NoCombine, Reverse, StrikeThrough, Undercurl, Underline};
         let palette = crate::palette::merge_palletes();
 
-        let mut hl = Highlights {
-            common: HashMap::new(),
-            syntax: HashMap::new(),
-            treesitter: HashMap::new(),
-            lsp: None,
-            plugins: HashMap::new(),
-            langs: HashMap::new(),
-        };
+        let transparent;
+        let ending_tildes;
+        let diagnostics;
+        let cmp_itemkind_reverse;
+        let code_style;
 
-        let common_float_border = HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1);
-        let common_normal_float = HighlightGroup::new().fg(&palette.fg).bg(&palette.bg1);
-        let common_added = HighlightGroup::new().fg(&palette.green);
-        let common_removed = HighlightGroup::new().fg(&palette.red);
-        let common_diff_delete = HighlightGroup::new().fg("none").bg(&palette.diff_delete);
-        let common_diff_text = HighlightGroup::new().fg("none").bg(&palette.diff_text);
-        let common_diff_add = HighlightGroup::new().fg("none").bg(&palette.diff_add);
-        let common_diff_change = HighlightGroup::new().fg("none").bg(&palette.diff_change);
-        let common_inc_search = HighlightGroup::new().fg(&palette.bg0).bg(&palette.orange);
-        let common_directory = HighlightGroup::new().fg(&palette.blue);
+        {
+            match GLOBAL_CONFIG.read() {
+                Ok(config) => {
+                    transparent = config.transparent;
+                    ending_tildes = config.ending_tildes;
+                    cmp_itemkind_reverse = config.cmp_itemkind_reverse;
+                    diagnostics = DiagnosticsConfig {
+                        darker: config.diagnostics.darker,
+                        undercurl: config.diagnostics.undercurl,
+                        background: config.diagnostics.background,
+                    };
+                    code_style = config.code_style.clone();
+                }
+                Err(_) => {
+                    let conf = OneDarkConfig::default();
+                    transparent = conf.transparent;
+                    ending_tildes = conf.ending_tildes;
+                    cmp_itemkind_reverse = conf.cmp_itemkind_reverse;
+                    diagnostics = conf.diagnostics;
+                    code_style = conf.code_style;
+                }
+            }
+        }
+
+        let common_float_border = HighlightGroup::new()
+            .fg(palette.grey.clone())
+            .bg(palette.bg1.clone());
+        let common_normal_float = HighlightGroup::new()
+            .fg(palette.fg.clone())
+            .bg(palette.bg1.clone());
+        let common_added = HighlightGroup::new().fg(palette.green.clone());
+        let common_removed = HighlightGroup::new().fg(palette.red.clone());
+        let common_diff_delete = HighlightGroup::new()
+            .fg("none".into())
+            .bg(palette.diff_delete);
+        let common_diff_text = HighlightGroup::new()
+            .fg("none".into())
+            .bg(palette.diff_text.clone());
+        let common_diff_add = HighlightGroup::new().fg("none".into()).bg(palette.diff_add);
+        let common_diff_change = HighlightGroup::new()
+            .fg("none".into())
+            .bg(palette.diff_change);
+        let common_inc_search = HighlightGroup::new()
+            .fg(palette.bg0.clone())
+            .bg(palette.orange.clone());
+        let common_directory = HighlightGroup::new().fg(palette.blue.clone());
 
         // Common highlights
-        hl.common = HashMap::from([
+        let hl_common = HashMap::from([
             (
-                "Normal".to_string(),
+                "Normal".into(),
                 HighlightGroup::new()
-                    .fg(&palette.fg)
-                    .bg(if config.transparent {
-                        "none"
+                    .fg(palette.fg.clone())
+                    .bg(if transparent {
+                        "none".into()
                     } else {
-                        &palette.bg0
+                        palette.bg0.clone()
                     }),
             ),
             (
-                "Terminal".to_string(),
+                "Terminal".into(),
                 HighlightGroup::new()
-                    .fg(&palette.fg)
-                    .bg(if config.transparent {
-                        "none"
+                    .fg(palette.fg.clone())
+                    .bg(if transparent {
+                        "none".into()
                     } else {
-                        &palette.bg0
+                        palette.bg0.clone()
                     }),
             ),
             (
-                "EndOfBuffer".to_string(),
+                "EndOfBuffer".into(),
                 HighlightGroup::new()
-                    .fg(if config.ending_tildes {
-                        &palette.bg2
+                    .fg(if ending_tildes {
+                        palette.bg2.clone()
                     } else {
-                        &palette.bg0
+                        palette.bg0.clone()
                     })
-                    .bg(if config.transparent {
-                        "none"
+                    .bg(if transparent {
+                        "none".into()
                     } else {
-                        &palette.bg0
+                        palette.bg0.clone()
                     }),
             ),
             (
-                "FoldColumn".to_string(),
+                "FoldColumn".into(),
                 HighlightGroup::new()
-                    .fg(&palette.fg)
-                    .bg(if config.transparent {
-                        "none"
+                    .fg(palette.fg.clone())
+                    .bg(if transparent {
+                        "none".into()
                     } else {
-                        &palette.bg1
+                        palette.bg1.clone()
                     }),
             ),
             (
-                "Folded".to_string(),
+                "Folded".into(),
                 HighlightGroup::new()
-                    .fg(&palette.fg)
-                    .bg(if config.transparent {
-                        "none"
+                    .fg(palette.fg.clone())
+                    .bg(if transparent {
+                        "none".into()
                     } else {
-                        &palette.bg1
+                        palette.bg1.clone()
                     }),
             ),
             (
-                "SignColumn".to_string(),
+                "SignColumn".into(),
                 HighlightGroup::new()
-                    .fg(&palette.fg)
-                    .bg(if config.transparent {
-                        "none"
+                    .fg(palette.fg.clone())
+                    .bg(if transparent {
+                        "none".into()
                     } else {
-                        &palette.bg0
+                        palette.bg0.clone()
                     }),
             ),
             (
-                "ToolbarLine".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
+                "ToolbarLine".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
             ),
-            ("Cursor".to_string(), HighlightGroup::new().fmt("reverse")),
-            ("vCursor".to_string(), HighlightGroup::new().fmt("reverse")),
-            ("iCursor".to_string(), HighlightGroup::new().fmt("reverse")),
-            ("lCursor".to_string(), HighlightGroup::new().fmt("reverse")),
-            ("CursorIM".to_string(), HighlightGroup::new().fmt("reverse")),
+            ("Cursor".into(), HighlightGroup::new().fmt(vec![Reverse])),
+            ("vCursor".into(), HighlightGroup::new().fmt(vec![Reverse])),
+            ("iCursor".into(), HighlightGroup::new().fmt(vec![Reverse])),
+            ("lCursor".into(), HighlightGroup::new().fmt(vec![Reverse])),
+            ("CursorIM".into(), HighlightGroup::new().fmt(vec![Reverse])),
             (
-                "CursorColumn".to_string(),
-                HighlightGroup::new().bg(&palette.bg1),
-            ),
-            (
-                "CursorLine".to_string(),
-                HighlightGroup::new().bg(&palette.bg1),
+                "CursorColumn".into(),
+                HighlightGroup::new().bg(palette.bg1.clone()),
             ),
             (
-                "ColorColumn".to_string(),
-                HighlightGroup::new().bg(&palette.bg1),
+                "CursorLine".into(),
+                HighlightGroup::new().bg(palette.bg1.clone()),
             ),
             (
-                "CursorLineNr".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
+                "ColorColumn".into(),
+                HighlightGroup::new().bg(palette.bg1.clone()),
             ),
             (
-                "LineNr".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "CursorLineNr".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
             ),
             (
-                "Conceal".to_string(),
-                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
-            ),
-            ("Added".to_string(), common_added.clone()),
-            ("Removed".to_string(), common_removed.clone()),
-            (
-                "Changed".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
-            ),
-            ("DiffAdd".to_string(), common_diff_add.clone()),
-            ("DiffChange".to_string(), common_diff_change.clone()),
-            ("DiffDelete".to_string(), common_diff_delete.clone()),
-            ("DiffText".to_string(), common_diff_text.clone()),
-            (
-                "DiffAdded".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "LineNr".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "DiffChanged".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
-            ),
-            (
-                "DiffRemoved".to_string(),
-                HighlightGroup::new().fg(&palette.red),
-            ),
-            (
-                "DiffDeleted".to_string(),
-                HighlightGroup::new().fg(&palette.red),
-            ),
-            (
-                "DiffFile".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
-            ),
-            (
-                "DiffIndexLine".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
-            ),
-            ("Directory".to_string(), common_directory.clone()),
-            (
-                "ErrorMsg".to_string(),
-                HighlightGroup::new().fg(&palette.red).fmt("bold"),
-            ),
-            (
-                "WarningMsg".to_string(),
-                HighlightGroup::new().fg(&palette.yellow).fmt("bold"),
-            ),
-            (
-                "MoreMsg".to_string(),
-                HighlightGroup::new().fg(&palette.blue).fmt("bold"),
-            ),
-            (
-                "CurSearch".to_string(),
-                HighlightGroup::new().fg(&palette.bg0).bg(&palette.orange),
-            ),
-            ("IncSearch".to_string(), common_inc_search.clone()),
-            (
-                "Search".to_string(),
+                "Conceal".into(),
                 HighlightGroup::new()
-                    .fg(&palette.bg0)
-                    .bg(&palette.bg_yellow),
+                    .fg(palette.grey.clone())
+                    .bg(palette.bg1.clone()),
+            ),
+            ("Added".into(), common_added.clone()),
+            ("Removed".into(), common_removed.clone()),
+            (
+                "Changed".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
+            ),
+            ("DiffAdd".into(), common_diff_add.clone()),
+            ("DiffChange".into(), common_diff_change.clone()),
+            ("DiffDelete".into(), common_diff_delete.clone()),
+            ("DiffText".into(), common_diff_text.clone()),
+            (
+                "DiffAdded".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "Substitute".to_string(),
-                HighlightGroup::new().fg(&palette.bg0).bg(&palette.green),
+                "DiffChanged".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "MatchParen".to_string(),
-                HighlightGroup::new().fg("none").bg(&palette.grey),
+                "DiffRemoved".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "NonText".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "DiffDeleted".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "Whitespace".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "DiffFile".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "SpecialKey".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "DiffIndexLine".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
+            ("Directory".into(), common_directory.clone()),
             (
-                "Pmenu".to_string(),
-                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg1),
-            ),
-            (
-                "PmenuSbar".to_string(),
-                HighlightGroup::new().fg("none").bg(&palette.bg1),
-            ),
-            (
-                "PmenuSel".to_string(),
-                HighlightGroup::new().fg(&palette.bg0).bg(&palette.bg_blue),
-            ),
-            (
-                "WildMenu".to_string(),
-                HighlightGroup::new().fg(&palette.bg0).bg(&palette.blue),
-            ),
-            (
-                "PmenuThumb".to_string(),
-                HighlightGroup::new().fg("none").bg(&palette.grey),
-            ),
-            (
-                "Question".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
-            ),
-            (
-                "SpellBad".to_string(),
+                "ErrorMsg".into(),
                 HighlightGroup::new()
-                    .fg("none")
-                    .fmt("undercurl")
-                    .sp(&palette.red),
+                    .fg(palette.red.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "SpellCap".to_string(),
+                "WarningMsg".into(),
                 HighlightGroup::new()
-                    .fg("none")
-                    .fmt("undercurl")
-                    .sp(&palette.yellow),
+                    .fg(palette.yellow.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "SpellLocal".to_string(),
+                "MoreMsg".into(),
                 HighlightGroup::new()
-                    .fg("none")
-                    .fmt("undercurl")
-                    .sp(&palette.blue),
+                    .fg(palette.blue.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "SpellRare".to_string(),
+                "CurSearch".into(),
                 HighlightGroup::new()
-                    .fg("none")
-                    .fmt("undercurl")
-                    .sp(&palette.purple),
+                    .fg(palette.bg0.clone())
+                    .bg(palette.orange.clone()),
             ),
+            ("IncSearch".into(), common_inc_search.clone()),
             (
-                "StatusLine".to_string(),
-                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg2),
-            ),
-            (
-                "StatusLineTerm".to_string(),
-                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg2),
-            ),
-            (
-                "StatusLineNC".to_string(),
-                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
-            ),
-            (
-                "StatusLineTermNC".to_string(),
-                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
-            ),
-            (
-                "TabLine".to_string(),
-                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg1),
-            ),
-            (
-                "TabLineFill".to_string(),
-                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
-            ),
-            (
-                "TabLineSel".to_string(),
-                HighlightGroup::new().fg(&palette.bg0).bg(&palette.fg),
-            ),
-            (
-                "WinSeparator".to_string(),
-                HighlightGroup::new().fg(&palette.bg3),
-            ),
-            ("Visual".to_string(), HighlightGroup::new().bg(&palette.bg3)),
-            (
-                "VisualNOS".to_string(),
+                "Search".into(),
                 HighlightGroup::new()
-                    .fg("none")
-                    .bg(&palette.bg2)
-                    .fmt("underline"),
+                    .fg(palette.bg0.clone())
+                    .bg(palette.bg_yellow.clone()),
             ),
             (
-                "QuickFixLine".to_string(),
-                HighlightGroup::new().fg(&palette.blue).fmt("underline"),
+                "Substitute".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg0.clone())
+                    .bg(palette.green.clone()),
             ),
             (
-                "Debug".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "MatchParen".into(),
+                HighlightGroup::new()
+                    .fg("none".into())
+                    .bg(palette.grey.clone()),
             ),
             (
-                "debugPC".to_string(),
-                HighlightGroup::new().fg(&palette.bg0).bg(&palette.green),
+                "NonText".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "debugBreakpoint".to_string(),
-                HighlightGroup::new().fg(&palette.bg0).bg(&palette.red),
+                "Whitespace".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "ToolbarButton".to_string(),
-                HighlightGroup::new().fg(&palette.bg0).bg(&palette.bg_blue),
+                "SpecialKey".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
-            ("FloatBorder".to_string(), common_float_border.clone()),
-            ("NormalFloat".to_string(), common_normal_float.clone()),
+            (
+                "Pmenu".into(),
+                HighlightGroup::new()
+                    .fg(palette.fg.clone())
+                    .bg(palette.bg1.clone()),
+            ),
+            (
+                "PmenuSbar".into(),
+                HighlightGroup::new()
+                    .fg("none".into())
+                    .bg(palette.bg1.clone()),
+            ),
+            (
+                "PmenuSel".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg0.clone())
+                    .bg(palette.bg_blue.clone()),
+            ),
+            (
+                "WildMenu".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg0.clone())
+                    .bg(palette.blue.clone()),
+            ),
+            (
+                "PmenuThumb".into(),
+                HighlightGroup::new()
+                    .fg("none".into())
+                    .bg(palette.grey.clone()),
+            ),
+            (
+                "Question".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
+            ),
+            (
+                "SpellBad".into(),
+                HighlightGroup::new()
+                    .fg("none".into())
+                    .fmt(vec![Undercurl])
+                    .sp(palette.red.clone()),
+            ),
+            (
+                "SpellCap".into(),
+                HighlightGroup::new()
+                    .fg("none".into())
+                    .fmt(vec![Undercurl])
+                    .sp(palette.yellow.clone()),
+            ),
+            (
+                "SpellLocal".into(),
+                HighlightGroup::new()
+                    .fg("none".into())
+                    .fmt(vec![Undercurl])
+                    .sp(palette.blue.clone()),
+            ),
+            (
+                "SpellRare".into(),
+                HighlightGroup::new()
+                    .fg("none".into())
+                    .fmt(vec![Undercurl])
+                    .sp(palette.purple.clone()),
+            ),
+            (
+                "StatusLine".into(),
+                HighlightGroup::new()
+                    .fg(palette.fg.clone())
+                    .bg(palette.bg2.clone()),
+            ),
+            (
+                "StatusLineTerm".into(),
+                HighlightGroup::new()
+                    .fg(palette.fg.clone())
+                    .bg(palette.bg2.clone()),
+            ),
+            (
+                "StatusLineNC".into(),
+                HighlightGroup::new()
+                    .fg(palette.grey.clone())
+                    .bg(palette.bg1.clone()),
+            ),
+            (
+                "StatusLineTermNC".into(),
+                HighlightGroup::new()
+                    .fg(palette.grey.clone())
+                    .bg(palette.bg1.clone()),
+            ),
+            (
+                "TabLine".into(),
+                HighlightGroup::new()
+                    .fg(palette.fg.clone())
+                    .bg(palette.bg1.clone()),
+            ),
+            (
+                "TabLineFill".into(),
+                HighlightGroup::new()
+                    .fg(palette.grey.clone())
+                    .bg(palette.bg1.clone()),
+            ),
+            (
+                "TabLineSel".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg0.clone())
+                    .bg(palette.fg.clone()),
+            ),
+            (
+                "WinSeparator".into(),
+                HighlightGroup::new().fg(palette.bg3.clone()),
+            ),
+            (
+                "Visual".into(),
+                HighlightGroup::new().bg(palette.bg3.clone()),
+            ),
+            (
+                "VisualNOS".into(),
+                HighlightGroup::new()
+                    .fg("none".into())
+                    .bg(palette.bg2.clone())
+                    .fmt(vec![Underline]),
+            ),
+            (
+                "QuickFixLine".into(),
+                HighlightGroup::new()
+                    .fg(palette.blue.clone())
+                    .fmt(vec![Underline]),
+            ),
+            (
+                "Debug".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
+            ),
+            (
+                "debugPC".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg0.clone())
+                    .bg(palette.green.clone()),
+            ),
+            (
+                "debugBreakpoint".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg0.clone())
+                    .bg(palette.red.clone()),
+            ),
+            (
+                "ToolbarButton".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg0.clone())
+                    .bg(palette.bg_blue.clone()),
+            ),
+            ("FloatBorder".into(), common_float_border.clone()),
+            ("NormalFloat".into(), common_normal_float.clone()),
         ]);
 
         let syntax_comment = HighlightGroup::new()
-            .fg(&palette.grey)
-            .fmt(&config.code_style.comments.clone());
-        let syntax_title = HighlightGroup::new().fg(&palette.cyan);
-        let syntax_special = HighlightGroup::new().fg(&palette.red);
-        let syntax_delimiter = HighlightGroup::new().fg(&palette.light_grey);
+            .fg(palette.grey.clone())
+            .fmt(code_style.comments.clone());
+        let syntax_title = HighlightGroup::new().fg(palette.cyan.clone());
+        let syntax_special = HighlightGroup::new().fg(palette.red.clone());
+        let syntax_delimiter = HighlightGroup::new().fg(palette.light_grey.clone());
 
         // Syntax highlights
-        hl.syntax = HashMap::from([
+        let hl_syntax = HashMap::from([
             (
-                "String".to_string(),
+                "String".into(),
                 HighlightGroup::new()
-                    .fg(&palette.green)
-                    .fmt(&config.code_style.strings.clone()),
+                    .fg(palette.green.clone())
+                    .fmt(code_style.strings.clone()),
             ),
             (
-                "Character".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "Character".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "Number".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "Number".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "Float".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "Float".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "Boolean".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "Boolean".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "Type".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "Type".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
             ),
             (
-                "Structure".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "Structure".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
             ),
             (
-                "StorageClass".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "StorageClass".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
             ),
             (
-                "Identifier".to_string(),
+                "Identifier".into(),
                 HighlightGroup::new()
-                    .fg(&palette.red)
-                    .fmt(&config.code_style.variables.clone()),
+                    .fg(palette.red.clone())
+                    .fmt(code_style.variables.clone()),
             ),
             (
-                "Constant".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "Constant".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "PreProc".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "PreProc".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "PreCondit".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "PreCondit".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "Include".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "Include".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "Keyword".to_string(),
+                "Keyword".into(),
                 HighlightGroup::new()
-                    .fg(&palette.purple)
-                    .fmt(&config.code_style.keywords.clone()),
+                    .fg(palette.purple.clone())
+                    .fmt(code_style.keywords.clone()),
             ),
             (
-                "Define".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "Define".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "Typedef".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "Typedef".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
             ),
             (
-                "Exception".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "Exception".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "Conditional".to_string(),
+                "Conditional".into(),
                 HighlightGroup::new()
-                    .fg(&palette.purple)
-                    .fmt(&config.code_style.keywords.clone()),
+                    .fg(palette.purple.clone())
+                    .fmt(code_style.keywords.clone()),
             ),
             (
-                "Repeat".to_string(),
+                "Repeat".into(),
                 HighlightGroup::new()
-                    .fg(&palette.purple)
-                    .fmt(&config.code_style.keywords.clone()),
+                    .fg(palette.purple.clone())
+                    .fmt(code_style.keywords.clone()),
             ),
             (
-                "Statement".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
-            ),
-            ("Macro".to_string(), HighlightGroup::new().fg(&palette.red)),
-            (
-                "Error".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "Statement".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "Label".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
-            ),
-            ("Special".to_string(), syntax_special.clone()),
-            (
-                "SpecialChar".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "Macro".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "Function".to_string(),
+                "Error".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
+            ),
+            (
+                "Label".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
+            ),
+            ("Special".into(), syntax_special.clone()),
+            (
+                "SpecialChar".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
+            ),
+            (
+                "Function".into(),
                 HighlightGroup::new()
-                    .fg(&palette.blue)
-                    .fmt(&config.code_style.functions.clone()),
+                    .fg(palette.blue.clone())
+                    .fmt(code_style.functions.clone()),
             ),
             (
-                "Operator".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "Operator".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
-            ("Title".to_string(), syntax_title.clone()),
-            ("Tag".to_string(), HighlightGroup::new().fg(&palette.green)),
-            ("Delimiter".to_string(), syntax_delimiter.clone()),
-            ("Comment".to_string(), syntax_comment.clone()),
+            ("Title".into(), syntax_title.clone()),
             (
-                "SpecialComment".to_string(),
+                "Tag".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
+            ),
+            ("Delimiter".into(), syntax_delimiter.clone()),
+            ("Comment".into(), syntax_comment.clone()),
+            (
+                "SpecialComment".into(),
                 HighlightGroup::new()
-                    .fg(&palette.grey)
-                    .fmt(&config.code_style.comments.clone()),
+                    .fg(palette.grey.clone())
+                    .fmt(code_style.comments.clone()),
             ),
             (
-                "Todo".to_string(),
+                "Todo".into(),
                 HighlightGroup::new()
-                    .fg(&palette.red)
-                    .fmt(&config.code_style.comments.clone()),
+                    .fg(palette.red.clone())
+                    .fmt(code_style.comments.clone()),
             ),
         ]);
 
         // TreeSitter highlights
-        hl.treesitter = HashMap::from([
+        let hl_treesitter = HashMap::from([
             (
-                "TSAnnotation".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
+                "TSAnnotation".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
             ),
             (
-                "TSAttribute".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "TSAttribute".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "TSBoolean".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "TSBoolean".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "TSCharacter".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "TSCharacter".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "TSComment".to_string(),
+                "TSComment".into(),
                 HighlightGroup::new()
-                    .fg(&palette.grey)
-                    .fmt(&config.code_style.comments.clone()),
+                    .fg(palette.grey.clone())
+                    .fmt(code_style.comments.clone()),
             ),
             (
-                "TSConditional".to_string(),
+                "TSConditional".into(),
                 HighlightGroup::new()
-                    .fg(&palette.purple)
-                    .fmt(&config.code_style.keywords.clone()),
+                    .fg(palette.purple.clone())
+                    .fmt(code_style.keywords.clone()),
             ),
             (
-                "TSConstant".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "TSConstant".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "TSConstBuiltin".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "TSConstBuiltin".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "TSConstMacro".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "TSConstMacro".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "TSConstructor".to_string(),
-                HighlightGroup::new().fg(&palette.yellow).fmt("bold"),
-            ),
-            ("TSError".to_string(), HighlightGroup::new().fg(&palette.fg)),
-            (
-                "TSException".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
-            ),
-            (
-                "TSField".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
-            ),
-            (
-                "TSFloat".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
-            ),
-            (
-                "TSFunction".to_string(),
+                "TSConstructor".into(),
                 HighlightGroup::new()
-                    .fg(&palette.blue)
-                    .fmt(&config.code_style.functions.clone()),
+                    .fg(palette.yellow.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "TSFuncBuiltin".to_string(),
+                "TSError".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "TSException".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
+            ),
+            (
+                "TSField".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
+            ),
+            (
+                "TSFloat".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
+            ),
+            (
+                "TSFunction".into(),
                 HighlightGroup::new()
-                    .fg(&palette.cyan)
-                    .fmt(&config.code_style.functions.clone()),
+                    .fg(palette.blue.clone())
+                    .fmt(code_style.functions.clone()),
             ),
             (
-                "TSFuncMacro".to_string(),
+                "TSFuncBuiltin".into(),
                 HighlightGroup::new()
-                    .fg(&palette.cyan)
-                    .fmt(&config.code_style.functions.clone()),
+                    .fg(palette.cyan.clone())
+                    .fmt(code_style.functions.clone()),
             ),
             (
-                "TSInclude".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
-            ),
-            (
-                "TSKeyword".to_string(),
+                "TSFuncMacro".into(),
                 HighlightGroup::new()
-                    .fg(&palette.purple)
-                    .fmt(&config.code_style.keywords.clone()),
+                    .fg(palette.cyan.clone())
+                    .fmt(code_style.functions.clone()),
             ),
             (
-                "TSKeywordFunction".to_string(),
+                "TSInclude".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
+            ),
+            (
+                "TSKeyword".into(),
                 HighlightGroup::new()
-                    .fg(&palette.purple)
-                    .fmt(&config.code_style.functions.clone()),
+                    .fg(palette.purple.clone())
+                    .fmt(code_style.keywords.clone()),
             ),
             (
-                "TSKeywordOperator".to_string(),
+                "TSKeywordFunction".into(),
                 HighlightGroup::new()
-                    .fg(&palette.purple)
-                    .fmt(&config.code_style.keywords.clone()),
+                    .fg(palette.purple.clone())
+                    .fmt(code_style.functions.clone()),
             ),
             (
-                "TSLabel".to_string(),
-                HighlightGroup::new().fg(&palette.red),
-            ),
-            (
-                "TSMethod".to_string(),
+                "TSKeywordOperator".into(),
                 HighlightGroup::new()
-                    .fg(&palette.blue)
-                    .fmt(&config.code_style.functions.clone()),
+                    .fg(palette.purple.clone())
+                    .fmt(code_style.keywords.clone()),
             ),
             (
-                "TSNamespace".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
-            ),
-            ("TSNone".to_string(), HighlightGroup::new().fg(&palette.fg)),
-            (
-                "TSNumber".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "TSLabel".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "TSOperator".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
-            ),
-            (
-                "TSParameter".to_string(),
-                HighlightGroup::new().fg(&palette.red),
-            ),
-            (
-                "TSParameterReference".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
-            ),
-            (
-                "TSProperty".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
-            ),
-            (
-                "TSPunctDelimiter".to_string(),
-                HighlightGroup::new().fg(&palette.light_grey),
-            ),
-            (
-                "TSPunctBracket".to_string(),
-                HighlightGroup::new().fg(&palette.light_grey),
-            ),
-            (
-                "TSPunctSpecial".to_string(),
-                HighlightGroup::new().fg(&palette.red),
-            ),
-            (
-                "TSRepeat".to_string(),
+                "TSMethod".into(),
                 HighlightGroup::new()
-                    .fg(&palette.purple)
-                    .fmt(&config.code_style.keywords.clone()),
+                    .fg(palette.blue.clone())
+                    .fmt(code_style.functions.clone()),
             ),
             (
-                "TSString".to_string(),
+                "TSNamespace".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
+            ),
+            (
+                "TSNone".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "TSNumber".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
+            ),
+            (
+                "TSOperator".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "TSParameter".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
+            ),
+            (
+                "TSParameterReference".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "TSProperty".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
+            ),
+            (
+                "TSPunctDelimiter".into(),
+                HighlightGroup::new().fg(palette.light_grey.clone()),
+            ),
+            (
+                "TSPunctBracket".into(),
+                HighlightGroup::new().fg(palette.light_grey.clone()),
+            ),
+            (
+                "TSPunctSpecial".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
+            ),
+            (
+                "TSRepeat".into(),
                 HighlightGroup::new()
-                    .fg(&palette.green)
-                    .fmt(&config.code_style.strings.clone()),
+                    .fg(palette.purple.clone())
+                    .fmt(code_style.keywords.clone()),
             ),
             (
-                "TSStringRegex".to_string(),
+                "TSString".into(),
                 HighlightGroup::new()
-                    .fg(&palette.orange)
-                    .fmt(&config.code_style.strings.clone()),
+                    .fg(palette.green.clone())
+                    .fmt(code_style.strings.clone()),
             ),
             (
-                "TSStringEscape".to_string(),
+                "TSStringRegex".into(),
                 HighlightGroup::new()
-                    .fg(&palette.red)
-                    .fmt(&config.code_style.strings.clone()),
+                    .fg(palette.orange.clone())
+                    .fmt(code_style.strings.clone()),
             ),
             (
-                "TSSymbol".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
-            ),
-            (
-                "TSTag".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
-            ),
-            (
-                "TSTagDelimiter".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
-            ),
-            ("TSText".to_string(), HighlightGroup::new().fg(&palette.fg)),
-            (
-                "TSStrong".to_string(),
-                HighlightGroup::new().fg(&palette.fg).fmt("bold"),
-            ),
-            (
-                "TSEmphasis".to_string(),
-                HighlightGroup::new().fg(&palette.fg).fmt("italic"),
-            ),
-            (
-                "TSUnderline".to_string(),
-                HighlightGroup::new().fg(&palette.fg).fmt("underline"),
-            ),
-            (
-                "TSStrike".to_string(),
-                HighlightGroup::new().fg(&palette.fg).fmt("strikethrough"),
-            ),
-            (
-                "TSTitle".to_string(),
-                HighlightGroup::new().fg(&palette.orange).fmt("bold"),
-            ),
-            (
-                "TSLiteral".to_string(),
-                HighlightGroup::new().fg(&palette.green),
-            ),
-            (
-                "TSURI".to_string(),
-                HighlightGroup::new().fg(&palette.cyan).fmt("underline"),
-            ),
-            ("TSMath".to_string(), HighlightGroup::new().fg(&palette.fg)),
-            (
-                "TSTextReference".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
-            ),
-            (
-                "TSEnvironment".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
-            ),
-            (
-                "TSEnvironmentName".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
-            ),
-            ("TSNote".to_string(), HighlightGroup::new().fg(&palette.fg)),
-            (
-                "TSWarning".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
-            ),
-            (
-                "TSDanger".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
-            ),
-            (
-                "TSType".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
-            ),
-            (
-                "TSTypeBuiltin".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
-            ),
-            (
-                "TSVariable".to_string(),
+                "TSStringEscape".into(),
                 HighlightGroup::new()
-                    .fg(&palette.fg)
-                    .fmt(&config.code_style.variables.clone()),
+                    .fg(palette.red.clone())
+                    .fmt(code_style.strings.clone()),
             ),
             (
-                "TSVariableBuiltin".to_string(),
+                "TSSymbol".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
+            ),
+            (
+                "TSTag".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
+            ),
+            (
+                "TSTagDelimiter".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
+            ),
+            (
+                "TSText".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "TSStrong".into(),
+                HighlightGroup::new().fg(palette.fg.clone()).fmt(vec![Bold]),
+            ),
+            (
+                "TSEmphasis".into(),
                 HighlightGroup::new()
-                    .fg(&palette.red)
-                    .fmt(&config.code_style.variables.clone()),
+                    .fg(palette.fg.clone())
+                    .fmt(vec![Italic]),
+            ),
+            (
+                "TSUnderline".into(),
+                HighlightGroup::new()
+                    .fg(palette.fg.clone())
+                    .fmt(vec![Underline]),
+            ),
+            (
+                "TSStrike".into(),
+                HighlightGroup::new()
+                    .fg(palette.fg.clone())
+                    .fmt(vec![StrikeThrough]),
+            ),
+            (
+                "TSTitle".into(),
+                HighlightGroup::new()
+                    .fg(palette.orange.clone())
+                    .fmt(vec![Bold]),
+            ),
+            (
+                "TSLiteral".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
+            ),
+            (
+                "TSURI".into(),
+                HighlightGroup::new()
+                    .fg(palette.cyan.clone())
+                    .fmt(vec![Underline]),
+            ),
+            (
+                "TSMath".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "TSTextReference".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
+            ),
+            (
+                "TSEnvironment".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "TSEnvironmentName".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "TSNote".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "TSWarning".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "TSDanger".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "TSType".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
+            ),
+            (
+                "TSTypeBuiltin".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
+            ),
+            (
+                "TSVariable".into(),
+                HighlightGroup::new()
+                    .fg(palette.fg.clone())
+                    .fmt(code_style.variables.clone()),
+            ),
+            (
+                "TSVariableBuiltin".into(),
+                HighlightGroup::new()
+                    .fg(palette.red.clone())
+                    .fmt(code_style.variables.clone()),
             ),
         ]);
 
         // LSP plugin highlights
-        let diagnostics_error_color = if config.diagnostics.darker {
+        let diagnostics_error_color = if diagnostics.darker {
             palette.dark_red.clone()
         } else {
             palette.red.clone()
         };
 
-        let diagnostics_hint_color = if config.diagnostics.darker {
+        let diagnostics_hint_color = if diagnostics.darker {
             palette.dark_purple.clone()
         } else {
             palette.purple.clone()
         };
 
-        let diagnostics_warn_color = if config.diagnostics.darker {
+        let diagnostics_warn_color = if diagnostics.darker {
             palette.dark_yellow.clone()
         } else {
             palette.yellow.clone()
         };
 
-        let diagnostics_info_color = if config.diagnostics.darker {
+        let diagnostics_info_color = if diagnostics.darker {
             palette.dark_cyan.clone()
         } else {
             palette.cyan.clone()
         };
 
-        let error_bg = if config.diagnostics.background {
-            match util::darken(&diagnostics_error_color, 0.1, Some(&palette.bg0)) {
+        let error_bg = if diagnostics.background {
+            match util::darken(
+                diagnostics_error_color.clone(),
+                0.1,
+                Some(palette.bg0.clone()),
+            ) {
                 Ok(color) => color,
                 Err(_) => "none".into(),
             }
         } else {
             "none".into()
         };
-        let warn_bg = if config.diagnostics.background {
-            match util::darken(&diagnostics_warn_color, 0.1, Some(&palette.bg0)) {
+        let warn_bg = if diagnostics.background {
+            match util::darken(
+                diagnostics_warn_color.clone(),
+                0.1,
+                Some(palette.bg0.clone()),
+            ) {
                 Ok(color) => color,
                 Err(_) => "none".into(),
             }
         } else {
             "none".into()
         };
-        let info_bg = if config.diagnostics.background {
-            match util::darken(&diagnostics_info_color, 0.1, Some(&palette.bg0)) {
+        let info_bg = if diagnostics.background {
+            match util::darken(
+                diagnostics_info_color.clone(),
+                0.1,
+                Some(palette.bg0.clone()),
+            ) {
                 Ok(color) => color,
                 Err(_) => "none".into(),
             }
         } else {
             "none".into()
         };
-        let hint_bg = if config.diagnostics.background {
-            match util::darken(&diagnostics_hint_color, 0.1, Some(&palette.bg0)) {
+        let hint_bg = if diagnostics.background {
+            match util::darken(
+                diagnostics_hint_color.clone(),
+                0.1,
+                Some(palette.bg0.clone()),
+            ) {
                 Ok(color) => color,
                 Err(_) => "none".into(),
             }
@@ -847,1313 +989,1440 @@ impl Default for Highlights {
             "none".into()
         };
 
-        // Underline diagnostics
-        let underline_fmt = if config.diagnostics.undercurl {
-            "undercurl"
+        // vec![Underline] diagnostics
+        let underline_fmt = if diagnostics.undercurl {
+            vec![Undercurl]
         } else {
-            "underline"
+            vec![Underline]
         };
 
-        let diagnostic_error = HighlightGroup::new().fg(&palette.red);
-        let diagnostic_hint = HighlightGroup::new().fg(&palette.purple);
-        let diagnostic_info = HighlightGroup::new().fg(&palette.cyan);
-        let diagnostic_warn = HighlightGroup::new().fg(&palette.yellow);
+        let diagnostic_error = HighlightGroup::new().fg(palette.red.clone());
+        let diagnostic_hint = HighlightGroup::new().fg(palette.purple.clone());
+        let diagnostic_info = HighlightGroup::new().fg(palette.cyan.clone());
+        let diagnostic_warn = HighlightGroup::new().fg(palette.yellow.clone());
         let diagnostic_virtual_text_error = HighlightGroup::new()
-            .fg(&diagnostics_error_color)
-            .bg(&error_bg);
-        let diagnostic_virtual_text_warn = HighlightGroup::new()
-            .fg(&diagnostics_warn_color)
-            .bg(&warn_bg);
-        let diagnostic_virtual_text_info = HighlightGroup::new()
-            .fg(&diagnostics_info_color)
-            .bg(&info_bg);
+            .fg(diagnostics_error_color)
+            .bg(error_bg);
+        let diagnostic_virtual_text_warn =
+            HighlightGroup::new().fg(diagnostics_warn_color).bg(warn_bg);
+        let diagnostic_virtual_text_info =
+            HighlightGroup::new().fg(diagnostics_info_color).bg(info_bg);
         let diagnostic_virtual_text_hint = HighlightGroup::new()
-            .fg(&diagnostics_hint_color)
-            .bg(&hint_bg);
-        let diagnostic_underline_error = HighlightGroup::new().fmt(underline_fmt).sp(&palette.red);
-        let diagnostic_underline_warn =
-            HighlightGroup::new().fmt(underline_fmt).sp(&palette.yellow);
-        let diagnostic_underline_info = HighlightGroup::new().fmt(underline_fmt).sp(&palette.blue);
-        let diagnostic_underline_hint =
-            HighlightGroup::new().fmt(underline_fmt).sp(&palette.purple);
+            .fg(diagnostics_hint_color.clone())
+            .bg(hint_bg);
+        let diagnostic_underline_error = HighlightGroup::new()
+            .fmt(underline_fmt.clone())
+            .sp(palette.red.clone());
+        let diagnostic_underline_warn = HighlightGroup::new()
+            .fmt(underline_fmt.clone())
+            .sp(palette.yellow.clone());
+        let diagnostic_underline_info = HighlightGroup::new()
+            .fmt(underline_fmt.clone())
+            .sp(palette.blue.clone());
+        let diagnostic_underline_hint = HighlightGroup::new()
+            .fmt(underline_fmt)
+            .sp(palette.purple.clone());
 
         let lsp_plugin = HashMap::from([
             (
-                "LspCxxHlGroupEnumConstant".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "LspCxxHlGroupEnumConstant".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "LspCxxHlGroupMemberVariable".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "LspCxxHlGroupMemberVariable".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "LspCxxHlGroupNamespace".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "LspCxxHlGroupNamespace".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "LspCxxHlSkippedRegion".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "LspCxxHlSkippedRegion".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "LspCxxHlSkippedRegionBeginEnd".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "LspCxxHlSkippedRegionBeginEnd".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
-            ("DiagnosticError".to_string(), diagnostic_error.clone()),
-            ("DiagnosticHint".to_string(), diagnostic_hint.clone()),
-            ("DiagnosticInfo".to_string(), diagnostic_info.clone()),
-            ("DiagnosticWarn".to_string(), diagnostic_warn.clone()),
+            ("DiagnosticError".into(), diagnostic_error.clone()),
+            ("DiagnosticHint".into(), diagnostic_hint.clone()),
+            ("DiagnosticInfo".into(), diagnostic_info.clone()),
+            ("DiagnosticWarn".into(), diagnostic_warn.clone()),
             (
-                "DiagnosticVirtualTextError".to_string(),
+                "DiagnosticVirtualTextError".into(),
                 diagnostic_virtual_text_error.clone(),
             ),
             (
-                "DiagnosticVirtualTextWarn".to_string(),
+                "DiagnosticVirtualTextWarn".into(),
                 diagnostic_virtual_text_warn.clone(),
             ),
             (
-                "DiagnosticVirtualTextInfo".to_string(),
+                "DiagnosticVirtualTextInfo".into(),
                 diagnostic_virtual_text_info.clone(),
             ),
             (
-                "DiagnosticVirtualTextHint".to_string(),
+                "DiagnosticVirtualTextHint".into(),
                 diagnostic_virtual_text_hint.clone(),
             ),
             (
-                "DiagnosticUnderlineInfo".to_string(),
+                "DiagnosticUnderlineInfo".into(),
                 diagnostic_virtual_text_info.clone(),
             ),
             (
-                "DiagnosticUnderlineWarn".to_string(),
+                "DiagnosticUnderlineWarn".into(),
                 diagnostic_virtual_text_warn.clone(),
             ),
             (
-                "LspReferenceText".to_string(),
-                HighlightGroup::new().bg(&palette.bg2),
+                "LspReferenceText".into(),
+                HighlightGroup::new().bg(palette.bg2.clone()),
             ),
             (
-                "LspReferenceWrite".to_string(),
-                HighlightGroup::new().bg(&palette.bg2),
+                "LspReferenceWrite".into(),
+                HighlightGroup::new().bg(palette.bg2.clone()),
             ),
             (
-                "LspReferenceRead".to_string(),
-                HighlightGroup::new().bg(&palette.bg2),
+                "LspReferenceRead".into(),
+                HighlightGroup::new().bg(palette.bg2.clone()),
             ),
             (
-                "LspCodeLens".to_string(),
+                "LspCodeLens".into(),
                 HighlightGroup::new()
-                    .fg(&palette.grey)
-                    .fmt(&config.code_style.comments),
+                    .fg(palette.grey.clone())
+                    .fmt(code_style.comments.clone()),
             ),
             (
-                "LspCodeLensSeparator".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "LspCodeLensSeparator".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "LspDiagnosticsDefaultError".to_string(),
+                "LspDiagnosticsDefaultError".into(),
                 diagnostic_error.clone(),
             ),
+            ("LspDiagnosticsDefaultHint".into(), diagnostic_hint.clone()),
             (
-                "LspDiagnosticsDefaultHint".to_string(),
-                diagnostic_hint.clone(),
-            ),
-            (
-                "LspDiagnosticsDefaultInformation".to_string(),
+                "LspDiagnosticsDefaultInformation".into(),
                 diagnostic_info.clone(),
             ),
             (
-                "LspDiagnosticsDefaultWarning".to_string(),
+                "LspDiagnosticsDefaultWarning".into(),
                 diagnostic_warn.clone(),
             ),
             (
-                "LspDiagnosticsUnderlineError".to_string(),
+                "LspDiagnosticsUnderlineError".into(),
                 diagnostic_underline_error,
             ),
             (
-                "LspDiagnosticsUnderlineHint".to_string(),
+                "LspDiagnosticsUnderlineHint".into(),
                 diagnostic_underline_hint,
             ),
             (
-                "LspDiagnosticsUnderlineInformation".to_string(),
+                "LspDiagnosticsUnderlineInformation".into(),
                 diagnostic_underline_info,
             ),
             (
-                "LspDiagnosticsUnderlineWarning".to_string(),
+                "LspDiagnosticsUnderlineWarning".into(),
                 diagnostic_underline_warn,
             ),
             (
-                "LspDiagnosticsVirtualTextError".to_string(),
+                "LspDiagnosticsVirtualTextError".into(),
                 diagnostic_virtual_text_error,
             ),
             (
-                "LspDiagnosticsVirtualTextWarning".to_string(),
+                "LspDiagnosticsVirtualTextWarning".into(),
                 diagnostic_virtual_text_warn,
             ),
             (
-                "LspDiagnosticsVirtualTextInformation".to_string(),
+                "LspDiagnosticsVirtualTextInformation".into(),
                 diagnostic_virtual_text_info,
             ),
             (
-                "LspDiagnosticsVirtualTextHint".to_string(),
+                "LspDiagnosticsVirtualTextHint".into(),
                 diagnostic_virtual_text_hint,
             ),
         ]);
 
-        // Implement plugin highlight tables
-        let mut plugins = HashMap::new();
-        plugins.insert("lsp".to_string(), lsp_plugin);
-
         let lsp_kind = HashMap::from([
-            ("Default", &palette.purple),
-            ("Array", &palette.yellow),
-            ("Boolean", &palette.orange),
-            ("Class", &palette.yellow),
-            ("Color", &palette.green),
-            ("Constant", &palette.orange),
-            ("Constructor", &palette.blue),
-            ("Enum", &palette.purple),
-            ("EnumMember", &palette.yellow),
-            ("Event", &palette.yellow),
-            ("Field", &palette.purple),
-            ("File", &palette.blue),
-            ("Folder", &palette.orange),
-            ("Function", &palette.blue),
-            ("Interface", &palette.green),
-            ("Key", &palette.cyan),
-            ("Keyword", &palette.cyan),
-            ("Method", &palette.blue),
-            ("Module", &palette.orange),
-            ("Namespace", &palette.red),
-            ("Null", &palette.grey),
-            ("Number", &palette.orange),
-            ("Object", &palette.red),
-            ("Operator", &palette.red),
-            ("Package", &palette.yellow),
-            ("Property", &palette.cyan),
-            ("Reference", &palette.orange),
-            ("Snippet", &palette.red),
-            ("String", &palette.green),
-            ("Struct", &palette.purple),
-            ("Text", &palette.light_grey),
-            ("TypeParameter", &palette.red),
-            ("Unit", &palette.green),
-            ("Value", &palette.orange),
-            ("Variable", &palette.purple),
+            ("Default", palette.purple.clone()),
+            ("Array", palette.yellow.clone()),
+            ("Boolean", palette.orange.clone()),
+            ("Class", palette.yellow.clone()),
+            ("Color", palette.green.clone()),
+            ("Constant", palette.orange.clone()),
+            ("Constructor", palette.blue.clone()),
+            ("Enum", palette.purple.clone()),
+            ("EnumMember", palette.yellow.clone()),
+            ("Event", palette.yellow.clone()),
+            ("Field", palette.purple.clone()),
+            ("File", palette.blue.clone()),
+            ("Folder", palette.orange.clone()),
+            ("Function", palette.blue.clone()),
+            ("Interface", palette.green.clone()),
+            ("Key", palette.cyan.clone()),
+            ("Keyword", palette.cyan.clone()),
+            ("Method", palette.blue.clone()),
+            ("Module", palette.orange.clone()),
+            ("Namespace", palette.red.clone()),
+            ("Null", palette.grey.clone()),
+            ("Number", palette.orange.clone()),
+            ("Object", palette.red.clone()),
+            ("Operator", palette.red.clone()),
+            ("Package", palette.yellow.clone()),
+            ("Property", palette.cyan.clone()),
+            ("Reference", palette.orange.clone()),
+            ("Snippet", palette.red.clone()),
+            ("String", palette.green.clone()),
+            ("Struct", palette.purple.clone()),
+            ("Text", palette.light_grey.clone()),
+            ("TypeParameter", palette.red.clone()),
+            ("Unit", palette.green.clone()),
+            ("Value", palette.orange.clone()),
+            ("Variable", palette.purple.clone()),
         ]);
 
+        let cmp_item_kind_fmt: Option<Vec<FmtType>> = if cmp_itemkind_reverse {
+            vec![Reverse].into()
+        } else {
+            None.into()
+        };
         // CMP plugin highlights
         let mut cmp_highlights = HashMap::from([
             (
-                "CmpItemAbbr".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
+                "CmpItemAbbr".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
             ),
             (
-                "CmpItemAbbrDeprecated".to_string(),
+                "CmpItemAbbrDeprecated".into(),
                 HighlightGroup::new()
-                    .fg(&palette.light_grey)
-                    .fmt("strikethrough"),
+                    .fg(palette.light_grey.clone())
+                    .fmt(vec![StrikeThrough]),
             ),
             (
-                "CmpItemAbbrMatch".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "CmpItemAbbrMatch".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "CmpItemAbbrMatchFuzzy".to_string(),
-                HighlightGroup::new().fg(&palette.cyan).fmt("underline"),
-            ),
-            (
-                "CmpItemMenu".to_string(),
-                HighlightGroup::new().fg(&palette.light_grey),
-            ),
-            (
-                "CmpItemKind".to_string(),
+                "CmpItemAbbrMatchFuzzy".into(),
                 HighlightGroup::new()
-                    .fg(&palette.purple)
-                    .fmt(if config.cmp_itemkind_reverse {
-                        "reverse"
-                    } else {
-                        "none"
-                    }),
+                    .fg(palette.cyan.clone())
+                    .fmt(vec![Underline]),
+            ),
+            (
+                "CmpItemMenu".into(),
+                HighlightGroup::new().fg(palette.light_grey.clone()),
+            ),
+            (
+                "CmpItemKind".into(),
+                HighlightGroup::new()
+                    .fg(palette.purple.clone())
+                    .fmt(cmp_item_kind_fmt.unwrap_or_default()),
             ),
         ]);
 
         for (kind, color) in lsp_kind.iter() {
+            let lsp_kind_cmp: Option<Vec<FmtType>> = if cmp_itemkind_reverse {
+                vec![Reverse].into()
+            } else {
+                None.into()
+            };
             cmp_highlights.insert(
-                format!("CmpItemKind{}", kind),
-                HighlightGroup::new().fg(color).fmt(
-                    if get_global_config().unwrap_or_default().cmp_itemkind_reverse {
-                        "reverse"
-                    } else {
-                        "none"
-                    },
-                ),
+                format!("CmpItemKind{}", kind).into(),
+                HighlightGroup::new()
+                    .fg(color.clone())
+                    .fmt(lsp_kind_cmp.unwrap_or_default()),
             );
         }
-
-        plugins.insert("cmp".to_string(), cmp_highlights);
 
         // WhichKey plugin highlights
         let whichkey_highlights = HashMap::from([
             (
-                "WhichKey".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "WhichKey".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "WhichKeyDesc".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "WhichKeyDesc".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "WhichKeyGroup".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "WhichKeyGroup".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "WhichKeySeparator".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "WhichKeySeparator".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
         ]);
-
-        plugins.insert("whichkey".to_string(), whichkey_highlights);
 
         // GitGutter plugin highlights
         let gitgutter_highlights = HashMap::from([
             (
-                "GitGutterAdd".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "GitGutterAdd".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "GitGutterChange".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "GitGutterChange".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "GitGutterDelete".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "GitGutterDelete".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
         ]);
-
-        plugins.insert("gitgutter".to_string(), gitgutter_highlights);
 
         // DiffView plugin highlights
         let diffview_highlights = HashMap::from([
             (
-                "DiffviewFilePanelTitle".to_string(),
-                HighlightGroup::new().fg(&palette.blue).fmt("bold"),
-            ),
-            (
-                "DiffviewFilePanelCounter".to_string(),
-                HighlightGroup::new().fg(&palette.purple).fmt("bold"),
-            ),
-            (
-                "DiffviewFilePanelFileName".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
-            ),
-            (
-                "DiffviewNormal".to_string(),
+                "DiffviewFilePanelTitle".into(),
                 HighlightGroup::new()
-                    .fg(&palette.fg)
-                    .bg(if config.transparent {
-                        "none"
+                    .fg(palette.blue.clone())
+                    .fmt(vec![Bold]),
+            ),
+            (
+                "DiffviewFilePanelCounter".into(),
+                HighlightGroup::new()
+                    .fg(palette.purple.clone())
+                    .fmt(vec![Bold]),
+            ),
+            (
+                "DiffviewFilePanelFileName".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "DiffviewNormal".into(),
+                HighlightGroup::new()
+                    .fg(palette.fg.clone())
+                    .bg(if transparent {
+                        "none".into()
                     } else {
-                        &palette.bg0
+                        palette.bg0.clone()
                     }),
             ),
             (
-                "DiffviewCursorLine".to_string(),
-                HighlightGroup::new().bg(&palette.bg1),
+                "DiffviewCursorLine".into(),
+                HighlightGroup::new().bg(palette.bg1.clone()),
             ),
             (
-                "DiffviewVertSplit".to_string(),
-                HighlightGroup::new().fg(&palette.bg3),
+                "DiffviewVertSplit".into(),
+                HighlightGroup::new().fg(palette.bg3),
             ),
             (
-                "DiffviewSignColumn".to_string(),
+                "DiffviewSignColumn".into(),
                 HighlightGroup::new()
-                    .fg(&palette.fg)
-                    .bg(if config.transparent {
-                        "none"
+                    .fg(palette.fg.clone())
+                    .bg(if transparent {
+                        "none".into()
                     } else {
-                        &palette.bg0
+                        palette.bg0.clone()
                     }),
             ),
             (
-                "DiffviewStatusLine".to_string(),
-                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg2),
-            ),
-            (
-                "DiffviewStatusLineNC".to_string(),
-                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
-            ),
-            (
-                "DiffviewEndOfBuffer".to_string(),
+                "DiffviewStatusLine".into(),
                 HighlightGroup::new()
-                    .fg(if config.ending_tildes {
-                        &palette.bg2
+                    .fg(palette.fg.clone())
+                    .bg(palette.bg2.clone()),
+            ),
+            (
+                "DiffviewStatusLineNC".into(),
+                HighlightGroup::new()
+                    .fg(palette.grey.clone())
+                    .bg(palette.bg1.clone()),
+            ),
+            (
+                "DiffviewEndOfBuffer".into(),
+                HighlightGroup::new()
+                    .fg(if ending_tildes {
+                        palette.bg2.clone()
                     } else {
-                        &palette.bg0
+                        palette.bg0.clone()
                     })
-                    .bg(if config.transparent {
-                        "none"
+                    .bg(if transparent {
+                        "none".into()
                     } else {
-                        &palette.bg0
+                        palette.bg0.clone()
                     }),
             ),
             (
-                "DiffviewFilePanelRootPath".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "DiffviewFilePanelRootPath".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "DiffviewFilePanelPath".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "DiffviewFilePanelPath".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "DiffviewFilePanelInsertions".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "DiffviewFilePanelInsertions".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "DiffviewFilePanelDeletions".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "DiffviewFilePanelDeletions".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "DiffviewStatusAdded".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "DiffviewStatusAdded".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "DiffviewStatusUntracked".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "DiffviewStatusUntracked".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "DiffviewStatusModified".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "DiffviewStatusModified".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "DiffviewStatusRenamed".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "DiffviewStatusRenamed".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "DiffviewStatusCopied".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "DiffviewStatusCopied".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "DiffviewStatusTypeChange".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "DiffviewStatusTypeChange".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "DiffviewStatusUnmerged".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "DiffviewStatusUnmerged".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "DiffviewStatusUnknown".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "DiffviewStatusUnknown".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "DiffviewStatusDeleted".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "DiffviewStatusDeleted".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "DiffviewStatusBroken".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "DiffviewStatusBroken".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
         ]);
-
-        plugins.insert("diffview".to_string(), diffview_highlights);
 
         // GitSigns plugin highlights
         let gitsigns_highlights = HashMap::from([
             (
-                "GitSignsAdd".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "GitSignsAdd".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "GitSignsAddLn".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "GitSignsAddLn".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "GitSignsAddNr".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "GitSignsAddNr".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "GitSignsChange".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "GitSignsChange".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "GitSignsChangeLn".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "GitSignsChangeLn".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "GitSignsChangeNr".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "GitSignsChangeNr".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "GitSignsDelete".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "GitSignsDelete".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "GitSignsDeleteLn".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "GitSignsDeleteLn".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "GitSignsDeleteNr".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "GitSignsDeleteNr".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
         ]);
-
-        plugins.insert("gitsigns".to_string(), gitsigns_highlights);
 
         // Telescope plugin highlights
         let telescope_highlights = HashMap::from([
             (
-                "TelescopeBorder".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "TelescopeBorder".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "TelescopePromptBorder".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "TelescopePromptBorder".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "TelescopeResultsBorder".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "TelescopeResultsBorder".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "TelescopePreviewBorder".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "TelescopePreviewBorder".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "TelescopeMatching".to_string(),
-                HighlightGroup::new().fg(&palette.orange).fmt("bold"),
+                "TelescopeMatching".into(),
+                HighlightGroup::new()
+                    .fg(palette.orange.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "TelescopePromptPrefix".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "TelescopePromptPrefix".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "TelescopeSelection".to_string(),
-                HighlightGroup::new().bg(&palette.bg2),
+                "TelescopeSelection".into(),
+                HighlightGroup::new().bg(palette.bg2.clone()),
             ),
             (
-                "TelescopeSelectionCaret".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "TelescopeSelectionCaret".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
             ),
         ]);
 
-        plugins.insert("telescope".to_string(), telescope_highlights);
+        let plugin_indent_line = HashMap::from([
+            (
+                "IndentBlankLine1".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
+            ),
+            (
+                "IndentBlankLine2".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
+            ),
+            (
+                "IndentBlankLine3".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
+            ),
+            (
+                "IndentBlankLine4".into(),
+                HighlightGroup::new().fg(palette.light_grey.clone()),
+            ),
+            (
+                "IndentBlankLine5".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
+            ),
+            (
+                "IndentBlankLine6".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
+            ),
+            (
+                "IndentBlanklineChar".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg1.clone())
+                    .fmt(vec![NoCombine]),
+            ),
+            (
+                "IndentBlanklineContextChar".into(),
+                HighlightGroup::new()
+                    .fg(palette.grey.clone())
+                    .fmt(vec![NoCombine]),
+            ),
+            (
+                "IndentBlanklineContextStart".into(),
+                HighlightGroup::new()
+                    .sp(palette.grey.clone())
+                    .fmt(vec![Underline]),
+            ),
+            (
+                "IndentBlanklineContextSpaceChar".into(),
+                HighlightGroup::new().fmt(vec![NoCombine]),
+            ),
+            (
+                "IblIndent".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg1.clone())
+                    .fmt(vec![NoCombine]),
+            ),
+            (
+                "IblWhitespace".into(),
+                HighlightGroup::new()
+                    .fg(palette.grey.clone())
+                    .fmt(vec![NoCombine]),
+            ),
+            (
+                "IblScope".into(),
+                HighlightGroup::new()
+                    .fg(palette.grey.clone())
+                    .fmt(vec![NoCombine]),
+            ),
+        ]);
 
         let mini = HashMap::from([
             (
-                "MiniAnimateCursor".to_string(),
-                HighlightGroup::new().fmt("reverse,nocombine"),
+                "MiniAnimateCursor".into(),
+                HighlightGroup::new().fmt(vec![Reverse, NoCombine]),
             ),
+            ("MiniAnimateNormalFloat".into(), common_normal_float.clone()),
+            ("MiniClueBorder".into(), common_float_border.clone()),
+            ("MiniClueDescGroup".into(), diagnostic_warn.clone()),
+            ("MiniClueDescSingle".into(), common_normal_float.clone()),
+            ("MiniClueNextKey".into(), diagnostic_hint.clone()),
             (
-                "MiniAnimateNormalFloat".to_string(),
-                common_normal_float.clone(),
-            ),
-            ("MiniClueBorder".to_string(), common_float_border.clone()),
-            ("MiniClueDescGroup".to_string(), diagnostic_warn.clone()),
-            (
-                "MiniClueDescSingle".to_string(),
-                common_normal_float.clone(),
-            ),
-            ("MiniClueNextKey".to_string(), diagnostic_hint.clone()),
-            (
-                "MiniClueNextKeyWithPostkeys".to_string(),
+                "MiniClueNextKeyWithPostkeys".into(),
                 diagnostic_error.clone(),
             ),
-            ("MiniClueSeparator".to_string(), diagnostic_info.clone()),
+            ("MiniClueSeparator".into(), diagnostic_info.clone()),
             (
-                "MiniClueTitle".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "MiniClueTitle".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "MiniCompletionActiveParameter".to_string(),
-                HighlightGroup::new().fmt("underline"),
+                "MiniCompletionActiveParameter".into(),
+                HighlightGroup::new().fmt(vec![Underline]),
             ),
             (
-                "MiniCursorword".to_string(),
-                HighlightGroup::new().fmt("underline"),
+                "MiniCursorword".into(),
+                HighlightGroup::new().fmt(vec![Underline]),
             ),
             (
-                "MiniCursorwordCurrent".to_string(),
-                HighlightGroup::new().fmt("underline"),
+                "MiniCursorwordCurrent".into(),
+                HighlightGroup::new().fmt(vec![Underline]),
             ),
-            ("MiniDepsChangeAdded".to_string(), common_added),
-            ("MiniDepsChangeRemoved".to_string(), common_removed),
-            ("MiniDepsHint".to_string(), diagnostic_hint.clone()),
-            ("MiniDepsInfo".to_string(), diagnostic_info.clone()),
-            ("MiniDepsMsgBreaking".to_string(), diagnostic_warn.clone()),
-            ("MiniDepsPlaceholder".to_string(), syntax_comment.clone()),
-            ("MiniDepsTitle".to_string(), syntax_title.clone()),
-            ("MiniDepsTitleError".to_string(), common_diff_delete.clone()),
-            ("MiniDepsTitleSame".to_string(), common_diff_text.clone()),
-            ("MiniDepsTitleUpdate".to_string(), common_diff_add.clone()),
+            ("MiniDepsChangeAdded".into(), common_added),
+            ("MiniDepsChangeRemoved".into(), common_removed),
+            ("MiniDepsHint".into(), diagnostic_hint.clone()),
+            ("MiniDepsInfo".into(), diagnostic_info.clone()),
+            ("MiniDepsMsgBreaking".into(), diagnostic_warn.clone()),
+            ("MiniDepsPlaceholder".into(), syntax_comment.clone()),
+            ("MiniDepsTitle".into(), syntax_title.clone()),
+            ("MiniDepsTitleError".into(), common_diff_delete.clone()),
+            ("MiniDepsTitleSame".into(), common_diff_text.clone()),
+            ("MiniDepsTitleUpdate".into(), common_diff_add.clone()),
             (
-                "MiniDiffSignAdd".to_string(),
-                HighlightGroup::new().fg(&palette.green),
-            ),
-            (
-                "MiniDiffSignChange".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "MiniDiffSignAdd".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "MiniDiffSignDelete".to_string(),
-                HighlightGroup::new().fg(&palette.red),
-            ),
-            ("MiniDiffOverAdd".to_string(), common_diff_add),
-            ("MiniDiffOverChange".to_string(), common_diff_text),
-            ("MiniDiffOverContext".to_string(), common_diff_change),
-            ("MiniDiffOverDelete".to_string(), common_diff_delete),
-            ("MiniFilesBorder".to_string(), common_float_border.clone()),
-            (
-                "MiniFilesBorderModified".to_string(),
-                diagnostic_warn.clone(),
+                "MiniDiffSignChange".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "MiniFilesCursorLine".to_string(),
-                HighlightGroup::new().bg(&palette.bg2),
+                "MiniDiffSignDelete".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
-            ("MiniFilesDirectory".to_string(), common_directory.clone()),
+            ("MiniDiffOverAdd".into(), common_diff_add),
+            ("MiniDiffOverChange".into(), common_diff_text),
+            ("MiniDiffOverContext".into(), common_diff_change),
+            ("MiniDiffOverDelete".into(), common_diff_delete),
+            ("MiniFilesBorder".into(), common_float_border.clone()),
+            ("MiniFilesBorderModified".into(), diagnostic_warn.clone()),
             (
-                "MiniFilesFile".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
+                "MiniFilesCursorLine".into(),
+                HighlightGroup::new().bg(palette.bg2.clone()),
             ),
-            ("MiniFilesNormal".to_string(), common_normal_float.clone()),
+            ("MiniFilesDirectory".into(), common_directory.clone()),
             (
-                "MiniFilesTitle".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "MiniFilesFile".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            ("MiniFilesNormal".into(), common_normal_float.clone()),
+            (
+                "MiniFilesTitle".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "MiniFilesTitleFocused".to_string(),
-                HighlightGroup::new().fg(&palette.cyan).fmt("bold"),
-            ),
-            (
-                "MiniHipatternsFixme".to_string(),
+                "MiniFilesTitleFocused".into(),
                 HighlightGroup::new()
-                    .fg(&palette.bg0)
-                    .bg(&palette.red)
-                    .fmt("bold"),
+                    .fg(palette.cyan.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "MiniHipatternsHack".to_string(),
+                "MiniHipatternsFixme".into(),
                 HighlightGroup::new()
-                    .fg(&palette.bg0)
-                    .bg(&palette.yellow)
-                    .fmt("bold"),
+                    .fg(palette.bg0.clone())
+                    .bg(palette.red.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "MiniHipatternsNote".to_string(),
+                "MiniHipatternsHack".into(),
                 HighlightGroup::new()
-                    .fg(&palette.bg0)
-                    .bg(&palette.cyan)
-                    .fmt("bold"),
+                    .fg(palette.bg0.clone())
+                    .bg(palette.yellow.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "MiniHipatternsTodo".to_string(),
+                "MiniHipatternsNote".into(),
                 HighlightGroup::new()
-                    .fg(&palette.bg0)
-                    .bg(&palette.purple)
-                    .fmt("bold"),
+                    .fg(palette.bg0.clone())
+                    .bg(palette.cyan.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "MiniIconsAzure".to_string(),
-                HighlightGroup::new().fg(&palette.bg_blue),
-            ),
-            (
-                "MiniIconsBlue".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
-            ),
-            (
-                "MiniIconsCyan".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
-            ),
-            (
-                "MiniIconsGreen".to_string(),
-                HighlightGroup::new().fg(&palette.green),
-            ),
-            (
-                "MiniIconsGrey".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
-            ),
-            (
-                "MiniIconsOrange".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
-            ),
-            (
-                "MiniIconsPurple".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
-            ),
-            (
-                "MiniIconsRed".to_string(),
-                HighlightGroup::new().fg(&palette.red),
-            ),
-            (
-                "MiniIconsYellow".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
-            ),
-            (
-                "MiniIndentscopeSymbol".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
-            ),
-            (
-                "MiniIndentscopePrefix".to_string(),
-                HighlightGroup::new().fmt("nocombine"),
-            ),
-            (
-                "MiniJump".to_string(),
+                "MiniHipatternsTodo".into(),
                 HighlightGroup::new()
-                    .fg(&palette.purple)
-                    .fmt("underline")
-                    .sp(&palette.purple),
+                    .fg(palette.bg0.clone())
+                    .bg(palette.purple.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "MiniJump2dDim".to_string(),
-                HighlightGroup::new().fg(&palette.grey).fmt("nocombine"),
+                "MiniIconsAzure".into(),
+                HighlightGroup::new().fg(palette.bg_blue),
             ),
             (
-                "MiniJump2dSpot".to_string(),
-                HighlightGroup::new().fg(&palette.red).fmt("bold,nocombine"),
+                "MiniIconsBlue".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "MiniJump2dSpotAhead".to_string(),
+                "MiniIconsCyan".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
+            ),
+            (
+                "MiniIconsGreen".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
+            ),
+            (
+                "MiniIconsGrey".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
+            ),
+            (
+                "MiniIconsOrange".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
+            ),
+            (
+                "MiniIconsPurple".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
+            ),
+            (
+                "MiniIconsRed".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
+            ),
+            (
+                "MiniIconsYellow".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
+            ),
+            (
+                "MiniIndentscopeSymbol".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
+            ),
+            (
+                "MiniIndentscopePrefix".into(),
+                HighlightGroup::new().fmt(vec![NoCombine]),
+            ),
+            (
+                "MiniJump".into(),
                 HighlightGroup::new()
-                    .fg(&palette.cyan)
-                    .bg(&palette.bg0)
-                    .fmt("nocombine"),
+                    .fg(palette.purple.clone())
+                    .fmt(vec![Underline])
+                    .sp(palette.purple.clone()),
             ),
             (
-                "MiniJump2dSpotUnique".to_string(),
+                "MiniJump2dDim".into(),
                 HighlightGroup::new()
-                    .fg(&palette.yellow)
-                    .fmt("bold,nocombine"),
-            ),
-            ("MiniMapNormal".to_string(), common_normal_float.clone()),
-            ("MiniMapSymbolCount".to_string(), syntax_special.clone()),
-            ("MiniMapSymbolLine".to_string(), syntax_title.clone()),
-            ("MiniMapSymbolView".to_string(), syntax_delimiter.clone()),
-            ("MiniNotifyBorder".to_string(), common_float_border.clone()),
-            ("MiniNotifyNormal".to_string(), common_normal_float.clone()),
-            (
-                "MiniNotifyTitle".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                    .fg(palette.grey.clone())
+                    .fmt(vec![NoCombine]),
             ),
             (
-                "MiniOperatorsExchangeFrom".to_string(),
+                "MiniJump2dSpot".into(),
+                HighlightGroup::new()
+                    .fg(palette.red.clone())
+                    .fmt(vec![Bold, NoCombine]),
+            ),
+            (
+                "MiniJump2dSpotAhead".into(),
+                HighlightGroup::new()
+                    .fg(palette.cyan.clone())
+                    .bg(palette.bg0.clone())
+                    .fmt(vec![NoCombine]),
+            ),
+            (
+                "MiniJump2dSpotUnique".into(),
+                HighlightGroup::new()
+                    .fg(palette.yellow.clone())
+                    .fmt(vec![Bold, NoCombine]),
+            ),
+            ("MiniMapNormal".into(), common_normal_float.clone()),
+            ("MiniMapSymbolCount".into(), syntax_special.clone()),
+            ("MiniMapSymbolLine".into(), syntax_title.clone()),
+            ("MiniMapSymbolView".into(), syntax_delimiter.clone()),
+            ("MiniNotifyBorder".into(), common_float_border.clone()),
+            ("MiniNotifyNormal".into(), common_normal_float.clone()),
+            (
+                "MiniNotifyTitle".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
+            ),
+            (
+                "MiniOperatorsExchangeFrom".into(),
                 common_inc_search.clone(),
             ),
-            ("MiniPickBorder".to_string(), common_float_border),
-            ("MiniPickBorderBusy".to_string(), diagnostic_warn),
+            ("MiniPickBorder".into(), common_float_border),
+            ("MiniPickBorderBusy".into(), diagnostic_warn),
             (
-                "MiniPickBorderText".to_string(),
-                HighlightGroup::new().fg(&palette.cyan).fmt("bold"),
-            ),
-            ("MiniPickIconDirectory".to_string(), common_directory),
-            ("MiniPickIconFile".to_string(), common_normal_float.clone()),
-            ("MiniPickHeader".to_string(), diagnostic_hint.clone()),
-            (
-                "MiniPickMatchCurrent".to_string(),
-                HighlightGroup::new().bg(&palette.bg2),
-            ),
-            (
-                "MiniPickMatchMarked".to_string(),
-                HighlightGroup::new().bg(&palette.diff_text),
-            ),
-            ("MiniPickMatchRanges".to_string(), diagnostic_hint.clone()),
-            ("MiniPickNormal".to_string(), common_normal_float.clone()),
-            (
-                "MiniPickPreviewLine".to_string(),
-                HighlightGroup::new().bg(&palette.bg2),
-            ),
-            (
-                "MiniPickPreviewRegion".to_string(),
-                common_inc_search.clone(),
-            ),
-            ("MiniPickPrompt".to_string(), diagnostic_info),
-            (
-                "MiniStarterCurrent".to_string(),
-                HighlightGroup::new().fmt("nocombine"),
-            ),
-            (
-                "MiniStarterFooter".to_string(),
-                HighlightGroup::new().fg(&palette.dark_red).fmt("italic"),
-            ),
-            (
-                "MiniStarterHeader".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
-            ),
-            (
-                "MiniStarterInactive".to_string(),
+                "MiniPickBorderText".into(),
                 HighlightGroup::new()
-                    .fg(&palette.grey)
-                    .fmt(&config.code_style.comments),
+                    .fg(palette.cyan.clone())
+                    .fmt(vec![Bold]),
+            ),
+            ("MiniPickIconDirectory".into(), common_directory),
+            ("MiniPickIconFile".into(), common_normal_float.clone()),
+            ("MiniPickHeader".into(), diagnostic_hint.clone()),
+            (
+                "MiniPickMatchCurrent".into(),
+                HighlightGroup::new().bg(palette.bg2.clone()),
             ),
             (
-                "MiniStarterItem".to_string(),
-                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg0),
+                "MiniPickMatchMarked".into(),
+                HighlightGroup::new().bg(palette.diff_text),
+            ),
+            ("MiniPickMatchRanges".into(), diagnostic_hint.clone()),
+            ("MiniPickNormal".into(), common_normal_float.clone()),
+            (
+                "MiniPickPreviewLine".into(),
+                HighlightGroup::new().bg(palette.bg2.clone()),
+            ),
+            ("MiniPickPreviewRegion".into(), common_inc_search.clone()),
+            ("MiniPickPrompt".into(), diagnostic_info),
+            (
+                "MiniStarterCurrent".into(),
+                HighlightGroup::new().fmt(vec![NoCombine]),
             ),
             (
-                "MiniStarterItemBullet".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "MiniStarterFooter".into(),
+                HighlightGroup::new().fg(palette.dark_red).fmt(vec![Italic]),
             ),
             (
-                "MiniStarterItemPrefix".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "MiniStarterHeader".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
             ),
             (
-                "MiniStarterSection".to_string(),
-                HighlightGroup::new().fg(&palette.light_grey),
-            ),
-            (
-                "MiniStarterQuery".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
-            ),
-            (
-                "MiniStatuslineDevinfo".to_string(),
-                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg2),
-            ),
-            (
-                "MiniStatuslineFileinfo".to_string(),
-                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg2),
-            ),
-            (
-                "MiniStatuslineFilename".to_string(),
-                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
-            ),
-            (
-                "MiniStatuslineInactive".to_string(),
-                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg0),
-            ),
-            (
-                "MiniStatuslineModeCommand".to_string(),
+                "MiniStarterInactive".into(),
                 HighlightGroup::new()
-                    .fg(&palette.bg0)
-                    .bg(&palette.yellow)
-                    .fmt("bold"),
+                    .fg(palette.grey.clone())
+                    .fmt(code_style.comments.clone()),
             ),
             (
-                "MiniStatuslineModeInsert".to_string(),
+                "MiniStarterItem".into(),
                 HighlightGroup::new()
-                    .fg(&palette.bg0)
-                    .bg(&palette.blue)
-                    .fmt("bold"),
+                    .fg(palette.fg.clone())
+                    .bg(palette.bg0.clone()),
             ),
             (
-                "MiniStatuslineModeNormal".to_string(),
+                "MiniStarterItemBullet".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
+            ),
+            (
+                "MiniStarterItemPrefix".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
+            ),
+            (
+                "MiniStarterSection".into(),
+                HighlightGroup::new().fg(palette.light_grey.clone()),
+            ),
+            (
+                "MiniStarterQuery".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
+            ),
+            (
+                "MiniStatuslineDevinfo".into(),
                 HighlightGroup::new()
-                    .fg(&palette.bg0)
-                    .bg(&palette.green)
-                    .fmt("bold"),
+                    .fg(palette.fg.clone())
+                    .bg(palette.bg2.clone()),
             ),
             (
-                "MiniStatuslineModeOther".to_string(),
+                "MiniStatuslineFileinfo".into(),
                 HighlightGroup::new()
-                    .fg(&palette.bg0)
-                    .bg(&palette.cyan)
-                    .fmt("bold"),
+                    .fg(palette.fg.clone())
+                    .bg(palette.bg2.clone()),
             ),
             (
-                "MiniStatuslineModeReplace".to_string(),
+                "MiniStatuslineFilename".into(),
                 HighlightGroup::new()
-                    .fg(&palette.bg0)
-                    .bg(&palette.red)
-                    .fmt("bold"),
+                    .fg(palette.grey.clone())
+                    .bg(palette.bg1.clone()),
             ),
             (
-                "MiniStatuslineModeVisual".to_string(),
+                "MiniStatuslineInactive".into(),
                 HighlightGroup::new()
-                    .fg(&palette.bg0)
-                    .bg(&palette.purple)
-                    .fmt("bold"),
+                    .fg(palette.grey.clone())
+                    .bg(palette.bg0.clone()),
             ),
             (
-                "MiniSurround".to_string(),
-                HighlightGroup::new().fg(&palette.bg0).bg(&palette.orange),
-            ),
-            (
-                "MiniTablineCurrent".to_string(),
-                HighlightGroup::new().fmt("bold"),
-            ),
-            (
-                "MiniTablineFill".to_string(),
-                HighlightGroup::new().fg(&palette.grey).bg(&palette.bg1),
-            ),
-            (
-                "MiniTablineHidden".to_string(),
-                HighlightGroup::new().fg(&palette.fg).bg(&palette.bg1),
-            ),
-            (
-                "MiniTablineModifiedCurrent".to_string(),
-                HighlightGroup::new().fg(&palette.orange).fmt("bold,italic"),
-            ),
-            (
-                "MiniTablineModifiedHidden".to_string(),
+                "MiniStatuslineModeCommand".into(),
                 HighlightGroup::new()
-                    .fg(&palette.light_grey)
-                    .bg(&palette.bg1)
-                    .fmt("italic"),
+                    .fg(palette.bg0.clone())
+                    .bg(palette.yellow.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "MiniTablineModifiedVisible".to_string(),
+                "MiniStatuslineModeInsert".into(),
                 HighlightGroup::new()
-                    .fg(&palette.yellow)
-                    .bg(&palette.bg0)
-                    .fmt("italic"),
+                    .fg(palette.bg0.clone())
+                    .bg(palette.blue.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "MiniTablineTabpagesection".to_string(),
+                "MiniStatuslineModeNormal".into(),
                 HighlightGroup::new()
-                    .fg(&palette.bg0)
-                    .bg(&palette.bg_yellow),
+                    .fg(palette.bg0.clone())
+                    .bg(palette.green.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "MiniTablineVisible".to_string(),
+                "MiniStatuslineModeOther".into(),
                 HighlightGroup::new()
-                    .fg(&palette.light_grey)
-                    .bg(&palette.bg0),
+                    .fg(palette.bg0.clone())
+                    .bg(palette.cyan.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "MiniTestEmphasis".to_string(),
-                HighlightGroup::new().fmt("bold"),
+                "MiniStatuslineModeReplace".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg0.clone())
+                    .bg(palette.red.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "MiniTestFail".to_string(),
-                HighlightGroup::new().fg(&palette.red).fmt("bold"),
+                "MiniStatuslineModeVisual".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg0.clone())
+                    .bg(palette.purple.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "MiniTestPass".to_string(),
-                HighlightGroup::new().fg(&palette.green).fmt("bold"),
+                "MiniSurround".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg0.clone())
+                    .bg(palette.orange.clone()),
             ),
             (
-                "MiniTrailspace".to_string(),
-                HighlightGroup::new().bg(&palette.red),
+                "MiniTablineCurrent".into(),
+                HighlightGroup::new().fmt(vec![Bold]),
+            ),
+            (
+                "MiniTablineFill".into(),
+                HighlightGroup::new()
+                    .fg(palette.grey.clone())
+                    .bg(palette.bg1.clone()),
+            ),
+            (
+                "MiniTablineHidden".into(),
+                HighlightGroup::new()
+                    .fg(palette.fg.clone())
+                    .bg(palette.bg1.clone()),
+            ),
+            (
+                "MiniTablineModifiedCurrent".into(),
+                HighlightGroup::new()
+                    .fg(palette.orange.clone())
+                    .fmt(vec![Bold, Italic]),
+            ),
+            (
+                "MiniTablineModifiedHidden".into(),
+                HighlightGroup::new()
+                    .fg(palette.light_grey.clone())
+                    .bg(palette.bg1)
+                    .fmt(vec![Italic]),
+            ),
+            (
+                "MiniTablineModifiedVisible".into(),
+                HighlightGroup::new()
+                    .fg(palette.yellow.clone())
+                    .bg(palette.bg0.clone())
+                    .fmt(vec![Italic]),
+            ),
+            (
+                "MiniTablineTabpagesection".into(),
+                HighlightGroup::new()
+                    .fg(palette.bg0.clone())
+                    .bg(palette.bg_yellow),
+            ),
+            (
+                "MiniTablineVisible".into(),
+                HighlightGroup::new()
+                    .fg(palette.light_grey.clone())
+                    .bg(palette.bg0.clone()),
+            ),
+            (
+                "MiniTestEmphasis".into(),
+                HighlightGroup::new().fmt(vec![Bold]),
+            ),
+            (
+                "MiniTestFail".into(),
+                HighlightGroup::new()
+                    .fg(palette.red.clone())
+                    .fmt(vec![Bold]),
+            ),
+            (
+                "MiniTestPass".into(),
+                HighlightGroup::new()
+                    .fg(palette.green.clone())
+                    .fmt(vec![Bold]),
+            ),
+            (
+                "MiniTrailspace".into(),
+                HighlightGroup::new().bg(palette.red.clone()),
             ),
         ]);
 
-        plugins.insert("mini".to_string(), mini);
-
         // Language specific highlights
-        let mut langs = HashMap::new();
 
         // C language highlights
         let c_highlights = HashMap::from([
             (
-                "cInclude".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "cInclude".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "cStorageClass".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "cStorageClass".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "cTypedef".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "cTypedef".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "cDefine".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "cDefine".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "cTSInclude".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "cTSInclude".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "cTSConstant".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "cTSConstant".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "cTSConstMacro".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "cTSConstMacro".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "cTSOperator".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "cTSOperator".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
         ]);
-        langs.insert("c".to_string(), c_highlights);
 
         // C++ language highlights
         let cpp_highlights = HashMap::from([
             (
-                "cppStatement".to_string(),
-                HighlightGroup::new().fg(&palette.purple).fmt("bold"),
+                "cppStatement".into(),
+                HighlightGroup::new()
+                    .fg(palette.purple.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "cppTSInclude".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "cppTSInclude".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "cppTSConstant".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "cppTSConstant".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "cppTSConstMacro".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "cppTSConstMacro".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "cppTSOperator".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "cppTSOperator".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
         ]);
-        langs.insert("cpp".to_string(), cpp_highlights);
 
         // Markdown language highlights
         let markdown_highlights = HashMap::from([
             (
-                "markdownBlockquote".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "markdownBlockquote".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
+            ),
+            ("markdownBold".into(), HighlightGroup::new().fmt(vec![Bold])),
+            (
+                "markdownBoldDelimiter".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "markdownBold".to_string(),
-                HighlightGroup::new().fmt("bold"),
+                "markdownCode".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "markdownBoldDelimiter".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "markdownCodeBlock".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "markdownCode".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "markdownCodeDelimiter".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
             ),
             (
-                "markdownCodeBlock".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "markdownH1".into(),
+                HighlightGroup::new()
+                    .fg(palette.red.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "markdownCodeDelimiter".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "markdownH2".into(),
+                HighlightGroup::new()
+                    .fg(palette.purple.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "markdownH1".to_string(),
-                HighlightGroup::new().fg(&palette.red).fmt("bold"),
+                "markdownH3".into(),
+                HighlightGroup::new()
+                    .fg(palette.orange.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "markdownH2".to_string(),
-                HighlightGroup::new().fg(&palette.purple).fmt("bold"),
+                "markdownH4".into(),
+                HighlightGroup::new()
+                    .fg(palette.red.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "markdownH3".to_string(),
-                HighlightGroup::new().fg(&palette.orange).fmt("bold"),
+                "markdownH5".into(),
+                HighlightGroup::new()
+                    .fg(palette.purple.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "markdownH4".to_string(),
-                HighlightGroup::new().fg(&palette.red).fmt("bold"),
+                "markdownH6".into(),
+                HighlightGroup::new()
+                    .fg(palette.orange.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "markdownH5".to_string(),
-                HighlightGroup::new().fg(&palette.purple).fmt("bold"),
+                "markdownHeadingDelimiter".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "markdownH6".to_string(),
-                HighlightGroup::new().fg(&palette.orange).fmt("bold"),
+                "markdownHeadingRule".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "markdownHeadingDelimiter".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "markdownId".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
             ),
             (
-                "markdownHeadingRule".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "markdownIdDeclaration".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "markdownId".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "markdownItalic".into(),
+                HighlightGroup::new().fmt(vec![Italic]),
             ),
             (
-                "markdownIdDeclaration".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "markdownItalicDelimiter".into(),
+                HighlightGroup::new()
+                    .fg(palette.grey.clone())
+                    .fmt(vec![Italic]),
             ),
             (
-                "markdownItalic".to_string(),
-                HighlightGroup::new().fmt("italic"),
+                "markdownLinkDelimiter".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "markdownItalicDelimiter".to_string(),
-                HighlightGroup::new().fg(&palette.grey).fmt("italic"),
+                "markdownLinkText".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "markdownLinkDelimiter".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "markdownLinkTextDelimiter".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "markdownLinkText".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "markdownListMarker".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "markdownLinkTextDelimiter".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
+                "markdownOrderedListMarker".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "markdownListMarker".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "markdownRule".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "markdownOrderedListMarker".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "markdownUrl".into(),
+                HighlightGroup::new()
+                    .fg(palette.blue.clone())
+                    .fmt(vec![Underline]),
             ),
             (
-                "markdownRule".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "markdownUrlDelimiter".into(),
+                HighlightGroup::new().fg(palette.grey.clone()),
             ),
             (
-                "markdownUrl".to_string(),
-                HighlightGroup::new().fg(&palette.blue).fmt("underline"),
-            ),
-            (
-                "markdownUrlDelimiter".to_string(),
-                HighlightGroup::new().fg(&palette.grey),
-            ),
-            (
-                "markdownUrlTitleDelimiter".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "markdownUrlTitleDelimiter".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
         ]);
-        langs.insert("markdown".to_string(), markdown_highlights);
 
         // PHP language highlights
         let php_highlights = HashMap::from([
             (
-                "phpFunctions".to_string(),
+                "phpFunctions".into(),
                 HighlightGroup::new()
-                    .fg(&palette.fg)
-                    .fmt(&config.code_style.functions),
+                    .fg(palette.fg.clone())
+                    .fmt(code_style.functions.clone()),
             ),
             (
-                "phpMethods".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "phpMethods".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "phpStructure".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "phpStructure".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "phpOperator".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "phpOperator".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "phpMemberSelector".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
+                "phpMemberSelector".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
             ),
             (
-                "phpVarSelector".to_string(),
+                "phpVarSelector".into(),
                 HighlightGroup::new()
-                    .fg(&palette.orange)
-                    .fmt(&config.code_style.variables),
+                    .fg(palette.orange.clone())
+                    .fmt(code_style.variables.clone()),
             ),
             (
-                "phpIdentifier".to_string(),
+                "phpIdentifier".into(),
                 HighlightGroup::new()
-                    .fg(&palette.orange)
-                    .fmt(&config.code_style.variables),
+                    .fg(palette.orange.clone())
+                    .fmt(code_style.variables.clone()),
             ),
             (
-                "phpBoolean".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "phpBoolean".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "phpNumber".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "phpNumber".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "phpHereDoc".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "phpHereDoc".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "phpNowDoc".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "phpNowDoc".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "phpSCKeyword".to_string(),
+                "phpSCKeyword".into(),
                 HighlightGroup::new()
-                    .fg(&palette.purple)
-                    .fmt(&config.code_style.keywords),
+                    .fg(palette.purple.clone())
+                    .fmt(code_style.keywords.clone()),
             ),
             (
-                "phpFCKeyword".to_string(),
+                "phpFCKeyword".into(),
                 HighlightGroup::new()
-                    .fg(&palette.purple)
-                    .fmt(&config.code_style.keywords),
+                    .fg(palette.purple.clone())
+                    .fmt(code_style.keywords.clone()),
             ),
             (
-                "phpRegion".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "phpRegion".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
         ]);
-        langs.insert("php".to_string(), php_highlights);
 
         // Scala language highlights
         let scala_highlights = HashMap::from([
             (
-                "scalaNameDefinition".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
+                "scalaNameDefinition".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
             ),
             (
-                "scalaInterpolationBoundary".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "scalaInterpolationBoundary".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "scalaInterpolation".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "scalaInterpolation".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "scalaTypeOperator".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "scalaTypeOperator".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "scalaOperator".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "scalaOperator".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "scalaKeywordModifier".to_string(),
+                "scalaKeywordModifier".into(),
                 HighlightGroup::new()
-                    .fg(&palette.red)
-                    .fmt(&config.code_style.keywords),
+                    .fg(palette.red.clone())
+                    .fmt(code_style.keywords.clone()),
             ),
         ]);
-        langs.insert("scala".to_string(), scala_highlights);
 
         // TeX language highlights
         let tex_highlights = HashMap::from([
             (
-                "latexTSInclude".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "latexTSInclude".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "latexTSFuncMacro".to_string(),
+                "latexTSFuncMacro".into(),
                 HighlightGroup::new()
-                    .fg(&palette.fg)
-                    .fmt(&config.code_style.functions),
+                    .fg(palette.fg.clone())
+                    .fmt(code_style.functions.clone()),
             ),
             (
-                "latexTSEnvironment".to_string(),
-                HighlightGroup::new().fg(&palette.cyan).fmt("bold"),
+                "latexTSEnvironment".into(),
+                HighlightGroup::new()
+                    .fg(palette.cyan.clone())
+                    .fmt(vec![Bold]),
             ),
             (
-                "latexTSEnvironmentName".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "latexTSEnvironmentName".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
             ),
             (
-                "texCmdEnv".to_string(),
-                HighlightGroup::new().fg(&palette.cyan),
+                "texCmdEnv".into(),
+                HighlightGroup::new().fg(palette.cyan.clone()),
             ),
             (
-                "texEnvArgName".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "texEnvArgName".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
             ),
             (
-                "latexTSTitle".to_string(),
-                HighlightGroup::new().fg(&palette.green),
+                "latexTSTitle".into(),
+                HighlightGroup::new().fg(palette.green.clone()),
             ),
             (
-                "latexTSType".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "latexTSType".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "latexTSMath".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "latexTSMath".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "texMathZoneX".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "texMathZoneX".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "texMathZoneXX".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "texMathZoneXX".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "texMathDelimZone".to_string(),
-                HighlightGroup::new().fg(&palette.light_grey),
+                "texMathDelimZone".into(),
+                HighlightGroup::new().fg(palette.light_grey.clone()),
             ),
             (
-                "texMathDelim".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "texMathDelim".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "texMathOper".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "texMathOper".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "texCmd".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "texCmd".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "texCmdPart".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "texCmdPart".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "texCmdPackage".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "texCmdPackage".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "texPgfType".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "texPgfType".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
             ),
         ]);
-        langs.insert("tex".to_string(), tex_highlights);
 
         // Vim language highlights
         let vim_highlights = HashMap::from([
             (
-                "vimOption".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "vimOption".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "vimSetEqual".to_string(),
-                HighlightGroup::new().fg(&palette.yellow),
+                "vimSetEqual".into(),
+                HighlightGroup::new().fg(palette.yellow.clone()),
             ),
             (
-                "vimMap".to_string(),
-                HighlightGroup::new().fg(&palette.purple),
+                "vimMap".into(),
+                HighlightGroup::new().fg(palette.purple.clone()),
             ),
             (
-                "vimMapModKey".to_string(),
-                HighlightGroup::new().fg(&palette.orange),
+                "vimMapModKey".into(),
+                HighlightGroup::new().fg(palette.orange.clone()),
             ),
             (
-                "vimNotation".to_string(),
-                HighlightGroup::new().fg(&palette.red),
+                "vimNotation".into(),
+                HighlightGroup::new().fg(palette.red.clone()),
             ),
             (
-                "vimMapLhs".to_string(),
-                HighlightGroup::new().fg(&palette.fg),
+                "vimMapLhs".into(),
+                HighlightGroup::new().fg(palette.fg.clone()),
             ),
             (
-                "vimMapRhs".to_string(),
-                HighlightGroup::new().fg(&palette.blue),
+                "vimMapRhs".into(),
+                HighlightGroup::new().fg(palette.blue.clone()),
             ),
             (
-                "vimVar".to_string(),
+                "vimVar".into(),
                 HighlightGroup::new()
-                    .fg(&palette.fg)
-                    .fmt(&config.code_style.variables),
+                    .fg(palette.fg.clone())
+                    .fmt(code_style.variables.clone()),
             ),
             (
-                "vimCommentTitle".to_string(),
+                "vimCommentTitle".into(),
                 HighlightGroup::new()
-                    .fg(&palette.light_grey)
-                    .fmt(&config.code_style.comments),
+                    .fg(palette.light_grey.clone())
+                    .fmt(code_style.comments.clone()),
             ),
         ]);
-        langs.insert("vim".to_string(), vim_highlights);
 
-        hl.langs = langs;
-        hl.plugins = plugins;
+        let hl_langs = HashMap::from([
+            ("c".into(), c_highlights),
+            ("cpp".into(), cpp_highlights),
+            ("markdown".into(), markdown_highlights),
+            ("php".into(), php_highlights),
+            ("scala".into(), scala_highlights),
+            ("tex".into(), tex_highlights),
+            ("vim".into(), vim_highlights),
+        ]);
 
-        hl
+        let hl_plugins = HashMap::from([
+            ("lsp".into(), lsp_plugin),
+            // Ale
+            // Barbar
+            ("cmp".into(), cmp_highlights),
+            // Coc
+            ("whichkey".into(), whichkey_highlights),
+            ("gitgutter".into(), gitgutter_highlights),
+            // Hop
+            ("diffview".into(), diffview_highlights),
+            ("gitsigns".into(), gitsigns_highlights),
+            // Neo_tree
+            // Neotest
+            // Nvim_tree
+            ("telescope".into(), telescope_highlights),
+            // Dashboard
+            // Outline
+            // Navic
+            // Ts_rainbow
+            // Ts_rainbow2
+            // Rainbow_delimiters
+            ("indent_blankline".into(), plugin_indent_line),
+            ("mini".into(), mini),
+            // Illuminate
+        ]);
+
+        Highlights {
+            common: hl_common,
+            syntax: hl_syntax,
+            treesitter: hl_treesitter,
+            lsp: None,
+            plugins: hl_plugins,
+            langs: hl_langs,
+        }
     }
 }
 
-//impl Highlights {
-//    pub fn new() -> Self {
-//        Highlights::default()
-//    }
-//}
-
 // Apply vim highlights
-fn vim_highlights(highlights: &HashMap<String, HighlightGroup>) -> Result<()> {
+fn vim_highlights(highlights: &HashMap<Box<str>, HighlightGroup>) -> Result<()> {
     for (group_name, group_settings) in highlights {
+        let fmt = group_settings.fmt.as_ref();
         let opts = SetHighlightOpts::builder()
-            .foreground(&group_settings.fg.clone())
-            .background(&group_settings.bg.clone())
-            .special(&group_settings.sp.clone())
-            .italic(group_settings.fmt == "italic")
-            .bold(group_settings.fmt == "bold")
-            .underline(group_settings.fmt == "underline")
-            .undercurl(group_settings.fmt == "undercurl")
-            .reverse(group_settings.fmt == "reverse")
+            .foreground(&group_settings.fg)
+            .background(&group_settings.bg)
+            .special(&group_settings.sp)
+            .italic(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Italic)))
+            .bold(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Bold)))
+            .underline(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Underline)))
+            .undercurl(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Undercurl)))
+            .reverse(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Reverse)))
+            .nocombine(fmt.map_or(false, |fmt| fmt.contains(&FmtType::NoCombine)))
             .build();
 
         api::set_hl(0, group_name, &opts)?;
@@ -2162,25 +2431,27 @@ fn vim_highlights(highlights: &HashMap<String, HighlightGroup>) -> Result<()> {
 }
 
 // Merge user-defined highlights without overwriting with "none"
-fn merge_highlights(highlights: &HashMap<String, HighlightGroup>) -> Result<()> {
+fn merge_highlights(highlights: &HashMap<Box<str>, HighlightGroup>) -> Result<()> {
     for (group_name, group_settings) in highlights {
+        let fmt = group_settings.fmt.as_ref();
         let mut opts = SetHighlightOpts::builder();
 
-        if group_settings.fg != "none" {
+        if &*group_settings.fg != "none" {
             opts.foreground(&group_settings.fg);
         }
-        if group_settings.bg != "none" {
+        if &*group_settings.bg != "none" {
             opts.background(&group_settings.bg);
         }
-        if group_settings.sp != "none" {
+        if &*group_settings.sp != "none" {
             opts.special(&group_settings.sp);
         }
-        if group_settings.fmt != "none" {
-            opts.italic(group_settings.fmt == "italic")
-                .bold(group_settings.fmt == "bold")
-                .underline(group_settings.fmt == "underline")
-                .undercurl(group_settings.fmt == "undercurl")
-                .reverse(group_settings.fmt == "reverse");
+        if group_settings.fmt.is_some() {
+            opts.italic(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Italic)))
+                .bold(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Bold)))
+                .underline(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Underline)))
+                .undercurl(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Undercurl)))
+                .reverse(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Reverse)))
+                .nocombine(fmt.map_or(false, |fmt| fmt.contains(&FmtType::NoCombine)));
         }
 
         api::set_hl(0, group_name, &opts.build())?;
@@ -2210,9 +2481,9 @@ pub fn setup() -> Result<()> {
         vim_highlights(group)?;
     }
 
-    let config = get_global_config().unwrap_or_default();
+    let config = GLOBAL_CONFIG.read().map_err(|e| Other(format!("{}", e)))?;
     // Apply user-defined highlights
-    if let Some(highlights) = config.highlights {
+    if let Some(highlights) = &config.highlights {
         if let Some(common) = &highlights.common {
             merge_highlights(common)?;
         }

@@ -1,10 +1,10 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::fmt::Write;
+use std::{borrow::Cow, fmt::Write};
 
 // Default background and foreground colors
-pub const DEFAULT_BG: &str = "#000000";
-pub const DEFAULT_FG: &str = "#ffffff";
+const DEFAULT_BG: &str = "#000000";
+const DEFAULT_FG: &str = "#ffffff";
 
 // Use once_cell for the regex to avoid recompiling it on each call
 static HEX_REGEX: Lazy<Regex> =
@@ -17,7 +17,7 @@ static HEX_REGEX: Lazy<Regex> =
 ///
 /// # Returns
 /// * `Result<[u8; 3], String>` - RGB values as [r, g, b] or an error message
-pub fn hex_to_rgb(hex_str: &str) -> Result<[u8; 3], String> {
+fn hex_to_rgb(hex_str: Cow<'_, str>) -> Result<[u8; 3], String> {
     let hex_str = hex_str.to_lowercase();
 
     match HEX_REGEX.captures(&hex_str) {
@@ -44,7 +44,7 @@ pub fn hex_to_rgb(hex_str: &str) -> Result<[u8; 3], String> {
 ///
 /// # Returns
 /// * `Result<String, String>` - Blended color as a hex string or an error message
-pub fn blend(fg: &str, bg: &str, alpha: f32) -> Result<String, String> {
+fn blend<'a>(fg: Cow<'a, str>, bg: Cow<'a, str>, alpha: f32) -> Result<Cow<'a, str>, Cow<'a, str>> {
     let fg_rgb = hex_to_rgb(fg)?;
     let bg_rgb = hex_to_rgb(bg)?;
 
@@ -63,7 +63,7 @@ pub fn blend(fg: &str, bg: &str, alpha: f32) -> Result<String, String> {
     )
     .map_err(|e| format!("Failed to format hex string: {}", e))?;
 
-    Ok(result)
+    Ok(result.into())
 }
 
 /// Darkens a color by blending it with black or a specified background color
@@ -75,8 +75,12 @@ pub fn blend(fg: &str, bg: &str, alpha: f32) -> Result<String, String> {
 ///
 /// # Returns
 /// * `Result<String, String>` - Darkened color as a hex string or an error message
-pub fn darken(hex: &str, amount: f32, bg: Option<&str>) -> Result<String, String> {
-    let bg = bg.unwrap_or(DEFAULT_BG);
+pub fn darken<'a>(
+    hex: Cow<'a, str>,
+    amount: f32,
+    bg: Option<Cow<'a, str>>,
+) -> Result<Cow<'a, str>, Cow<'a, str>> {
+    let bg = bg.unwrap_or(DEFAULT_BG.into());
     blend(hex, bg, amount.abs())
 }
 
@@ -90,7 +94,11 @@ pub fn darken(hex: &str, amount: f32, bg: Option<&str>) -> Result<String, String
 /// # Returns
 /// * `Result<String, String>` - Lightened color as a hex string or an error message
 #[allow(dead_code)]
-pub fn lighten(hex: &str, amount: f32, fg: Option<&str>) -> Result<String, String> {
-    let fg = fg.unwrap_or(DEFAULT_FG);
+pub fn lighten<'a>(
+    hex: Cow<'a, str>,
+    amount: f32,
+    fg: Option<Cow<'a, str>>,
+) -> Result<Cow<'a, str>, Cow<'a, str>> {
+    let fg = fg.unwrap_or(DEFAULT_FG.into());
     blend(hex, fg, amount.abs())
 }
