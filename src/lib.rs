@@ -246,17 +246,19 @@ fn setup_fn(opts: Option<Object>) -> nvim_oxi::Result<()> {
         }
     }
 
-    if let Some(key) = &GLOBAL_CONFIG
-        .try_read()
-        .map_err(|e| Other(format!("{}", e)))?
-        .toggle_style_key
     {
-        api::set_keymap(
-            Mode::Normal,
-            key,
-            "<cmd>lua require(\"onedark_nvim_rs\").toggle()<cr>",
-            &SetKeymapOpts::builder().silent(true).noremap(true).build(),
-        )?;
+        if let Some(key) = &GLOBAL_CONFIG
+            .read()
+            .map_err(|e| Other(format!("{}", e)))?
+            .toggle_style_key
+        {
+            api::set_keymap(
+                Mode::Normal,
+                key,
+                "<cmd>lua require(\"onedark_nvim_rs\").toggle()<cr>",
+                &SetKeymapOpts::builder().silent(true).noremap(true).build(),
+            )?;
+        }
     }
 
     Ok(())
