@@ -1,70 +1,69 @@
 use crate::OneDarkStyle;
 use crate::GLOBAL_CONFIG;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(default)]
-pub struct ColorPalette<'a> {
-    pub black: Cow<'a, str>,
-    pub bg0: Cow<'a, str>,
-    pub bg1: Cow<'a, str>,
-    pub bg2: Cow<'a, str>,
-    pub bg3: Cow<'a, str>,
-    pub bg_d: Cow<'a, str>,
-    pub bg_blue: Cow<'a, str>,
-    pub bg_yellow: Cow<'a, str>,
-    pub fg: Cow<'a, str>,
-    pub purple: Cow<'a, str>,
-    pub green: Cow<'a, str>,
-    pub orange: Cow<'a, str>,
-    pub blue: Cow<'a, str>,
-    pub yellow: Cow<'a, str>,
-    pub cyan: Cow<'a, str>,
-    pub red: Cow<'a, str>,
-    pub grey: Cow<'a, str>,
-    pub light_grey: Cow<'a, str>,
-    pub dark_cyan: Cow<'a, str>,
-    pub dark_red: Cow<'a, str>,
-    pub dark_yellow: Cow<'a, str>,
-    pub dark_purple: Cow<'a, str>,
-    pub diff_add: Cow<'a, str>,
-    pub diff_delete: Cow<'a, str>,
-    pub diff_change: Cow<'a, str>,
-    pub diff_text: Cow<'a, str>,
+pub struct ColorPalette {
+    pub black: Box<str>,
+    pub bg0: Box<str>,
+    pub bg1: Box<str>,
+    pub bg2: Box<str>,
+    pub bg3: Box<str>,
+    pub bg_d: Box<str>,
+    pub bg_blue: Box<str>,
+    pub bg_yellow: Box<str>,
+    pub fg: Box<str>,
+    pub purple: Box<str>,
+    pub green: Box<str>,
+    pub orange: Box<str>,
+    pub blue: Box<str>,
+    pub yellow: Box<str>,
+    pub cyan: Box<str>,
+    pub red: Box<str>,
+    pub grey: Box<str>,
+    pub light_grey: Box<str>,
+    pub dark_cyan: Box<str>,
+    pub dark_red: Box<str>,
+    pub dark_yellow: Box<str>,
+    pub dark_purple: Box<str>,
+    pub diff_add: Box<str>,
+    pub diff_delete: Box<str>,
+    pub diff_change: Box<str>,
+    pub diff_text: Box<str>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct ConfigColorPalette<'a> {
-    pub black: Option<Cow<'a, str>>,
-    pub bg0: Option<Cow<'a, str>>,
-    pub bg1: Option<Cow<'a, str>>,
-    pub bg2: Option<Cow<'a, str>>,
-    pub bg3: Option<Cow<'a, str>>,
-    pub bg_d: Option<Cow<'a, str>>,
-    pub bg_blue: Option<Cow<'a, str>>,
-    pub bg_yellow: Option<Cow<'a, str>>,
-    pub fg: Option<Cow<'a, str>>,
-    pub purple: Option<Cow<'a, str>>,
-    pub green: Option<Cow<'a, str>>,
-    pub orange: Option<Cow<'a, str>>,
-    pub blue: Option<Cow<'a, str>>,
-    pub yellow: Option<Cow<'a, str>>,
-    pub cyan: Option<Cow<'a, str>>,
-    pub red: Option<Cow<'a, str>>,
-    pub grey: Option<Cow<'a, str>>,
-    pub light_grey: Option<Cow<'a, str>>,
-    pub dark_cyan: Option<Cow<'a, str>>,
-    pub dark_red: Option<Cow<'a, str>>,
-    pub dark_yellow: Option<Cow<'a, str>>,
-    pub dark_purple: Option<Cow<'a, str>>,
-    pub diff_add: Option<Cow<'a, str>>,
-    pub diff_delete: Option<Cow<'a, str>>,
-    pub diff_change: Option<Cow<'a, str>>,
-    pub diff_text: Option<Cow<'a, str>>,
+pub struct ConfigColorPalette {
+    pub black: Option<Box<str>>,
+    pub bg0: Option<Box<str>>,
+    pub bg1: Option<Box<str>>,
+    pub bg2: Option<Box<str>>,
+    pub bg3: Option<Box<str>>,
+    pub bg_d: Option<Box<str>>,
+    pub bg_blue: Option<Box<str>>,
+    pub bg_yellow: Option<Box<str>>,
+    pub fg: Option<Box<str>>,
+    pub purple: Option<Box<str>>,
+    pub green: Option<Box<str>>,
+    pub orange: Option<Box<str>>,
+    pub blue: Option<Box<str>>,
+    pub yellow: Option<Box<str>>,
+    pub cyan: Option<Box<str>>,
+    pub red: Option<Box<str>>,
+    pub grey: Option<Box<str>>,
+    pub light_grey: Option<Box<str>>,
+    pub dark_cyan: Option<Box<str>>,
+    pub dark_red: Option<Box<str>>,
+    pub dark_yellow: Option<Box<str>>,
+    pub dark_purple: Option<Box<str>>,
+    pub diff_add: Option<Box<str>>,
+    pub diff_delete: Option<Box<str>>,
+    pub diff_change: Option<Box<str>>,
+    pub diff_text: Option<Box<str>>,
 }
 
-pub fn get_palette<'a>(style: OneDarkStyle) -> ColorPalette<'a> {
+pub fn get_palette(style: OneDarkStyle) -> ColorPalette {
     match style {
         OneDarkStyle::Dark => ColorPalette {
             black: "#181a1f".into(),
@@ -265,7 +264,7 @@ pub fn get_palette<'a>(style: OneDarkStyle) -> ColorPalette<'a> {
     }
 }
 
-pub fn merge_palletes<'a>() -> ColorPalette<'a> {
+pub fn merge_palletes() -> ColorPalette {
     let def_palette = ColorPalette::default();
     let new_colors = match GLOBAL_CONFIG.read() {
         Ok(config) => config.colors.clone().unwrap_or_default(),
@@ -302,7 +301,7 @@ pub fn merge_palletes<'a>() -> ColorPalette<'a> {
     }
 }
 
-impl Default for ColorPalette<'_> {
+impl Default for ColorPalette {
     fn default() -> Self {
         let pal;
         {

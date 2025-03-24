@@ -3,16 +3,16 @@ use nvim_oxi::{
     Result,
 };
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
-use crate::{util, DiagnosticsConfig, OneDarkConfig, GLOBAL_CONFIG};
+use crate::{config::DiagnosticsConfig, util, OneDarkConfig, GLOBAL_CONFIG};
 
 // Highlight group structure
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct HighlightGroup<'a> {
-    fg: Cow<'a, str>,
-    bg: Cow<'a, str>,
-    sp: Cow<'a, str>,
+struct HighlightGroup {
+    fg: Box<str>,
+    bg: Box<str>,
+    sp: Box<str>,
     fmt: Option<Vec<FmtType>>,
 }
 
@@ -27,7 +27,7 @@ pub enum FmtType {
     StrikeThrough,
 }
 
-impl<'a> Default for HighlightGroup<'a> {
+impl Default for HighlightGroup {
     fn default() -> Self {
         HighlightGroup {
             fg: "none".into(),
@@ -38,22 +38,22 @@ impl<'a> Default for HighlightGroup<'a> {
     }
 }
 
-impl<'a> HighlightGroup<'a> {
+impl HighlightGroup {
     fn new() -> Self {
         Self::default()
     }
 
-    fn fg(mut self, fg: Cow<'a, str>) -> Self {
+    fn fg(mut self, fg: Box<str>) -> Self {
         self.fg = fg;
         self
     }
 
-    fn bg(mut self, bg: Cow<'a, str>) -> Self {
+    fn bg(mut self, bg: Box<str>) -> Self {
         self.bg = bg;
         self
     }
 
-    fn sp(mut self, sp: Cow<'a, str>) -> Self {
+    fn sp(mut self, sp: Box<str>) -> Self {
         self.sp = sp.into();
         self
     }
@@ -66,27 +66,27 @@ impl<'a> HighlightGroup<'a> {
 
 // Highlight collection structure
 #[derive(Clone, Debug)]
-pub struct Highlights<'a> {
-    common: HashMap<Box<str>, HighlightGroup<'a>>,
-    syntax: HashMap<Box<str>, HighlightGroup<'a>>,
-    treesitter: HashMap<Box<str>, HighlightGroup<'a>>,
-    lsp: Option<HashMap<Box<str>, HighlightGroup<'a>>>,
-    plugins: HashMap<Box<str>, HashMap<Box<str>, HighlightGroup<'a>>>,
-    langs: HashMap<Box<str>, HashMap<Box<str>, HighlightGroup<'a>>>,
+pub struct Highlights {
+    common: HashMap<Box<str>, HighlightGroup>,
+    syntax: HashMap<Box<str>, HighlightGroup>,
+    treesitter: HashMap<Box<str>, HighlightGroup>,
+    lsp: Option<HashMap<Box<str>, HighlightGroup>>,
+    plugins: HashMap<Box<str>, HashMap<Box<str>, HighlightGroup>>,
+    langs: HashMap<Box<str>, HashMap<Box<str>, HighlightGroup>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(default)]
-pub struct ConfigHighlights<'a> {
-    common: Option<HashMap<Box<str>, HighlightGroup<'a>>>,
-    syntax: Option<HashMap<Box<str>, HighlightGroup<'a>>>,
-    treesitter: Option<HashMap<Box<str>, HighlightGroup<'a>>>,
-    lsp: Option<HashMap<Box<str>, HighlightGroup<'a>>>,
-    plugins: Option<HashMap<Box<str>, HashMap<Box<str>, HighlightGroup<'a>>>>,
-    langs: Option<HashMap<Box<str>, HashMap<Box<str>, HighlightGroup<'a>>>>,
+pub struct ConfigHighlights {
+    common: Option<HashMap<Box<str>, HighlightGroup>>,
+    syntax: Option<HashMap<Box<str>, HighlightGroup>>,
+    treesitter: Option<HashMap<Box<str>, HighlightGroup>>,
+    lsp: Option<HashMap<Box<str>, HighlightGroup>>,
+    plugins: Option<HashMap<Box<str>, HashMap<Box<str>, HighlightGroup>>>,
+    langs: Option<HashMap<Box<str>, HashMap<Box<str>, HighlightGroup>>>,
 }
 
-impl<'a> Default for Highlights<'a> {
+impl Default for Highlights {
     fn default() -> Self {
         use FmtType::{Bold, Italic, NoCombine, Reverse, StrikeThrough, Undercurl, Underline};
         let palette = crate::palette::merge_palletes();
