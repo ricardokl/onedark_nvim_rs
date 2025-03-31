@@ -37,7 +37,6 @@ pub fn toggle_fn() -> nvim_oxi::Result<()> {
 pub fn setup_fn(opts: Option<Object>) -> nvim_oxi::Result<()> {
     {
         if let Some(obj) = opts {
-            //api::set_var("onedark_nvim_rs_config", OneDarkConfig::from_object(obj)?)?;
             *GLOBAL_CONFIG.write().map_err(|e| Other(format!("{}", e)))? =
                 OneDarkConfig::from_object(obj)?;
         }
@@ -78,7 +77,7 @@ pub fn colorscheme_fn() -> nvim_oxi::Result<()> {
 }
 
 #[nvim_oxi::plugin]
-fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
+fn onedark_nvim_rs() -> Dictionary {
     let colorscheme: Function<(), ()> = Function::from_fn(|()| match colorscheme_fn() {
         Ok(_) => {}
         Err(e) => api::err_writeln(&format!("{}", e)),
@@ -89,10 +88,11 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
         Err(e) => api::err_writeln(&format!("{}", e)),
     });
 
-    let setup = Function::from(|opts: Option<Object>| match setup_fn(opts) {
-        Ok(_) => {}
-        Err(e) => api::err_writeln(&format!("{}", e)),
-    });
+    let setup: Function<Option<Object>, ()> =
+        Function::from(|opts: Option<Object>| match setup_fn(opts) {
+            Ok(_) => {}
+            Err(e) => api::err_writeln(&format!("{}", e)),
+        });
 
     let load: Function<(), ()> = Function::from_fn(|_| {
         match colorscheme_fn() {
@@ -102,10 +102,10 @@ fn onedark_nvim_rs() -> nvim_oxi::Result<Dictionary> {
     });
 
     // Return the plugin API
-    Ok(Dictionary::from_iter::<[(&str, Object); 4]>([
+    Dictionary::from_iter::<[(&str, Object); 4]>([
         ("colorscheme", colorscheme.into()),
         ("toggle", toggle.into()),
         ("setup", setup.into()),
         ("load", load.into()),
-    ]))
+    ])
 }

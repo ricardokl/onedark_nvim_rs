@@ -33,7 +33,7 @@ pub struct ColorPalette {
     pub diff_text: Box<str>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Deserialize, Debug, Clone, Default)]
 pub struct ConfigColorPalette {
     pub black: Option<Box<str>>,
     pub bg0: Option<Box<str>>,
