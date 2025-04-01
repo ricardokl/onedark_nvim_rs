@@ -5,14 +5,14 @@ use nvim_oxi::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{config::DiagnosticsConfig, util, OneDarkConfig, GLOBAL_CONFIG};
+use crate::{config::DiagnosticsConfig, palette::Color, util, OneDarkConfig, GLOBAL_CONFIG};
 
 // Highlight group structure
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct HighlightGroup {
-    fg: Box<str>,
-    bg: Box<str>,
-    sp: Box<str>,
+    fg: Option<Color>,
+    bg: Option<Color>,
+    sp: Option<Color>,
     fmt: Option<Vec<FmtType>>,
 }
 
@@ -30,9 +30,9 @@ pub enum FmtType {
 impl Default for HighlightGroup {
     fn default() -> Self {
         HighlightGroup {
-            fg: "none".into(),
-            bg: "none".into(),
-            sp: "none".into(),
+            fg: None,
+            bg: None,
+            sp: None,
             fmt: None,
         }
     }
@@ -43,17 +43,17 @@ impl HighlightGroup {
         Self::default()
     }
 
-    fn fg(mut self, fg: Box<str>) -> Self {
-        self.fg = fg;
+    fn fg<T: Into<Option<Color>>>(mut self, fg: T) -> Self {
+        self.fg = fg.into();
         self
     }
 
-    fn bg(mut self, bg: Box<str>) -> Self {
-        self.bg = bg;
+    fn bg<T: Into<Option<Color>>>(mut self, bg: T) -> Self {
+        self.bg = bg.into();
         self
     }
 
-    fn sp(mut self, sp: Box<str>) -> Self {
+    fn sp<T: Into<Option<Color>>>(mut self, sp: T) -> Self {
         self.sp = sp.into();
         self
     }
@@ -75,7 +75,7 @@ pub struct Highlights {
     langs: HashMap<Box<str>, HashMap<Box<str>, HighlightGroup>>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Deserialize, Clone, Debug, Default)]
 #[serde(default)]
 pub struct ConfigHighlights {
     common: Option<HashMap<Box<str>, HighlightGroup>>,
@@ -129,16 +129,10 @@ impl Default for Highlights {
             .bg(palette.bg1.clone());
         let common_added = HighlightGroup::new().fg(palette.green.clone());
         let common_removed = HighlightGroup::new().fg(palette.red.clone());
-        let common_diff_delete = HighlightGroup::new()
-            .fg("none".into())
-            .bg(palette.diff_delete);
-        let common_diff_text = HighlightGroup::new()
-            .fg("none".into())
-            .bg(palette.diff_text.clone());
-        let common_diff_add = HighlightGroup::new().fg("none".into()).bg(palette.diff_add);
-        let common_diff_change = HighlightGroup::new()
-            .fg("none".into())
-            .bg(palette.diff_change);
+        let common_diff_delete = HighlightGroup::new().bg(palette.diff_delete);
+        let common_diff_text = HighlightGroup::new().bg(palette.diff_text.clone());
+        let common_diff_add = HighlightGroup::new().bg(palette.diff_add);
+        let common_diff_change = HighlightGroup::new().bg(palette.diff_change);
         let common_inc_search = HighlightGroup::new()
             .fg(palette.bg0.clone())
             .bg(palette.orange.clone());
@@ -151,9 +145,9 @@ impl Default for Highlights {
                 HighlightGroup::new()
                     .fg(palette.fg.clone())
                     .bg(if transparent {
-                        "none".into()
+                        None
                     } else {
-                        palette.bg0.clone()
+                        palette.bg0.clone().into()
                     }),
             ),
             (
@@ -161,9 +155,9 @@ impl Default for Highlights {
                 HighlightGroup::new()
                     .fg(palette.fg.clone())
                     .bg(if transparent {
-                        "none".into()
+                        None
                     } else {
-                        palette.bg0.clone()
+                        palette.bg0.clone().into()
                     }),
             ),
             (
@@ -175,9 +169,9 @@ impl Default for Highlights {
                         palette.bg0.clone()
                     })
                     .bg(if transparent {
-                        "none".into()
+                        None
                     } else {
-                        palette.bg0.clone()
+                        palette.bg0.clone().into()
                     }),
             ),
             (
@@ -185,9 +179,9 @@ impl Default for Highlights {
                 HighlightGroup::new()
                     .fg(palette.fg.clone())
                     .bg(if transparent {
-                        "none".into()
+                        None
                     } else {
-                        palette.bg1.clone()
+                        palette.bg1.clone().into()
                     }),
             ),
             (
@@ -195,9 +189,9 @@ impl Default for Highlights {
                 HighlightGroup::new()
                     .fg(palette.fg.clone())
                     .bg(if transparent {
-                        "none".into()
+                        None
                     } else {
-                        palette.bg1.clone()
+                        palette.bg1.clone().into()
                     }),
             ),
             (
@@ -205,9 +199,9 @@ impl Default for Highlights {
                 HighlightGroup::new()
                     .fg(palette.fg.clone())
                     .bg(if transparent {
-                        "none".into()
+                        None
                     } else {
-                        palette.bg0.clone()
+                        palette.bg0.clone().into()
                     }),
             ),
             (
@@ -319,9 +313,7 @@ impl Default for Highlights {
             ),
             (
                 "MatchParen".into(),
-                HighlightGroup::new()
-                    .fg("none".into())
-                    .bg(palette.grey.clone()),
+                HighlightGroup::new().fg(None).bg(palette.grey.clone()),
             ),
             (
                 "NonText".into(),
@@ -343,9 +335,7 @@ impl Default for Highlights {
             ),
             (
                 "PmenuSbar".into(),
-                HighlightGroup::new()
-                    .fg("none".into())
-                    .bg(palette.bg1.clone()),
+                HighlightGroup::new().fg(None).bg(palette.bg1.clone()),
             ),
             (
                 "PmenuSel".into(),
@@ -361,9 +351,7 @@ impl Default for Highlights {
             ),
             (
                 "PmenuThumb".into(),
-                HighlightGroup::new()
-                    .fg("none".into())
-                    .bg(palette.grey.clone()),
+                HighlightGroup::new().fg(None).bg(palette.grey.clone()),
             ),
             (
                 "Question".into(),
@@ -372,28 +360,28 @@ impl Default for Highlights {
             (
                 "SpellBad".into(),
                 HighlightGroup::new()
-                    .fg("none".into())
+                    .fg(None)
                     .fmt(vec![Undercurl])
                     .sp(palette.red.clone()),
             ),
             (
                 "SpellCap".into(),
                 HighlightGroup::new()
-                    .fg("none".into())
+                    .fg(None)
                     .fmt(vec![Undercurl])
                     .sp(palette.yellow.clone()),
             ),
             (
                 "SpellLocal".into(),
                 HighlightGroup::new()
-                    .fg("none".into())
+                    .fg(None)
                     .fmt(vec![Undercurl])
                     .sp(palette.blue.clone()),
             ),
             (
                 "SpellRare".into(),
                 HighlightGroup::new()
-                    .fg("none".into())
+                    .fg(None)
                     .fmt(vec![Undercurl])
                     .sp(palette.purple.clone()),
             ),
@@ -450,7 +438,7 @@ impl Default for Highlights {
             (
                 "VisualNOS".into(),
                 HighlightGroup::new()
-                    .fg("none".into())
+                    .fg(None)
                     .bg(palette.bg2.clone())
                     .fmt(vec![Underline]),
             ),
@@ -941,52 +929,40 @@ impl Default for Highlights {
         };
 
         let error_bg = if diagnostics.background {
-            match util::darken(
+            Some(util::darken(
                 diagnostics_error_color.clone(),
                 0.1,
                 Some(palette.bg0.clone()),
-            ) {
-                Ok(color) => color,
-                Err(_) => "none".into(),
-            }
+            ))
         } else {
-            "none".into()
+            None
         };
         let warn_bg = if diagnostics.background {
-            match util::darken(
+            Some(util::darken(
                 diagnostics_warn_color.clone(),
                 0.1,
                 Some(palette.bg0.clone()),
-            ) {
-                Ok(color) => color,
-                Err(_) => "none".into(),
-            }
+            ))
         } else {
-            "none".into()
+            None
         };
         let info_bg = if diagnostics.background {
-            match util::darken(
+            Some(util::darken(
                 diagnostics_info_color.clone(),
                 0.1,
                 Some(palette.bg0.clone()),
-            ) {
-                Ok(color) => color,
-                Err(_) => "none".into(),
-            }
+            ))
         } else {
-            "none".into()
+            None
         };
         let hint_bg = if diagnostics.background {
-            match util::darken(
+            Some(util::darken(
                 diagnostics_hint_color.clone(),
                 0.1,
                 Some(palette.bg0.clone()),
-            ) {
-                Ok(color) => color,
-                Err(_) => "none".into(),
-            }
+            ))
         } else {
-            "none".into()
+            None
         };
 
         // vec![Underline] diagnostics
@@ -1291,9 +1267,9 @@ impl Default for Highlights {
                 HighlightGroup::new()
                     .fg(palette.fg.clone())
                     .bg(if transparent {
-                        "none".into()
+                        None
                     } else {
-                        palette.bg0.clone()
+                        palette.bg0.clone().into()
                     }),
             ),
             (
@@ -1309,9 +1285,9 @@ impl Default for Highlights {
                 HighlightGroup::new()
                     .fg(palette.fg.clone())
                     .bg(if transparent {
-                        "none".into()
+                        None
                     } else {
-                        palette.bg0.clone()
+                        palette.bg0.clone().into()
                     }),
             ),
             (
@@ -1335,9 +1311,9 @@ impl Default for Highlights {
                         palette.bg0.clone()
                     })
                     .bg(if transparent {
-                        "none".into()
+                        None
                     } else {
-                        palette.bg0.clone()
+                        palette.bg0.clone().into()
                     }),
             ),
             (
@@ -2413,10 +2389,13 @@ impl Default for Highlights {
 fn vim_highlights(highlights: &HashMap<Box<str>, HighlightGroup>) -> Result<()> {
     for (group_name, group_settings) in highlights {
         let fmt = group_settings.fmt.as_ref();
+        let fg = group_settings.fg.as_ref().map(|c| c.as_str());
+        let bg = group_settings.bg.as_ref().map(|c| c.as_str());
+        let sp = group_settings.sp.as_ref().map(|c| c.as_str());
         let opts = SetHighlightOpts::builder()
-            .foreground(&group_settings.fg)
-            .background(&group_settings.bg)
-            .special(&group_settings.sp)
+            .foreground(fg.unwrap_or("none"))
+            .background(bg.unwrap_or("none"))
+            .special(sp.unwrap_or("none"))
             .italic(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Italic)))
             .bold(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Bold)))
             .underline(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Underline)))
@@ -2436,14 +2415,14 @@ fn merge_highlights(highlights: &HashMap<Box<str>, HighlightGroup>) -> Result<()
         let fmt = group_settings.fmt.as_ref();
         let mut opts = SetHighlightOpts::builder();
 
-        if &*group_settings.fg != "none" {
-            opts.foreground(&group_settings.fg);
+        if group_settings.fg.is_some() {
+            opts.foreground(group_settings.fg.as_ref().unwrap().as_str());
         }
-        if &*group_settings.bg != "none" {
-            opts.background(&group_settings.bg);
+        if group_settings.bg.is_some() {
+            opts.background(group_settings.bg.as_ref().unwrap().as_str());
         }
-        if &*group_settings.sp != "none" {
-            opts.special(&group_settings.sp);
+        if group_settings.sp.is_some() {
+            opts.special(group_settings.sp.as_ref().unwrap().as_str());
         }
         if group_settings.fmt.is_some() {
             opts.italic(fmt.map_or(false, |fmt| fmt.contains(&FmtType::Italic)))

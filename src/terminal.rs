@@ -19,22 +19,22 @@ pub fn setup() -> Result<()> {
         return Ok(());
     }
 
-    api::set_var("terminal_color_0", c.black.as_ref())?;
-    api::set_var("terminal_color_1", c.red.as_ref())?;
-    api::set_var("terminal_color_2", c.green.as_ref())?;
-    api::set_var("terminal_color_3", c.yellow.as_ref())?;
-    api::set_var("terminal_color_4", c.blue.as_ref())?;
-    api::set_var("terminal_color_5", c.purple.as_ref())?;
-    api::set_var("terminal_color_6", c.cyan.as_ref())?;
-    api::set_var("terminal_color_7", c.fg.as_ref())?;
-    api::set_var("terminal_color_8", c.grey.as_ref())?;
-    api::set_var("terminal_color_9", c.red.as_ref())?;
-    api::set_var("terminal_color_10", c.green.as_ref())?;
-    api::set_var("terminal_color_11", c.yellow.as_ref())?;
-    api::set_var("terminal_color_12", c.blue.as_ref())?;
-    api::set_var("terminal_color_13", c.purple.as_ref())?;
-    api::set_var("terminal_color_14", c.cyan.as_ref())?;
-    api::set_var("terminal_color_15", c.fg.as_ref())?;
+    api::set_var("terminal_color_0", c.black.to_string())?;
+    api::set_var("terminal_color_1", c.red.to_string())?;
+    api::set_var("terminal_color_2", c.green.to_string())?;
+    api::set_var("terminal_color_3", c.yellow.to_string())?;
+    api::set_var("terminal_color_4", c.blue.to_string())?;
+    api::set_var("terminal_color_5", c.purple.to_string())?;
+    api::set_var("terminal_color_6", c.cyan.to_string())?;
+    api::set_var("terminal_color_7", c.fg.to_string())?;
+    api::set_var("terminal_color_8", c.grey.to_string())?;
+    api::set_var("terminal_color_9", c.red.to_string())?;
+    api::set_var("terminal_color_10", c.green.to_string())?;
+    api::set_var("terminal_color_11", c.yellow.to_string())?;
+    api::set_var("terminal_color_12", c.blue.to_string())?;
+    api::set_var("terminal_color_13", c.purple.to_string())?;
+    api::set_var("terminal_color_14", c.cyan.to_string())?;
+    api::set_var("terminal_color_15", c.fg.to_string())?;
 
     Ok(())
 }
