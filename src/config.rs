@@ -71,7 +71,7 @@ pub struct DiagnosticsConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct OneDarkConfig {
+pub struct OneDarkConfig<'a> {
     pub style: OneDarkStyle,
     pub toggle_style_list: Vec<OneDarkStyle>,
     pub toggle_style_index: u8,
@@ -83,11 +83,11 @@ pub struct OneDarkConfig {
     pub code_style: CodeStyle,
     pub lualine: LualineConfig,
     pub colors: Option<ConfigColorPalette>,
-    pub highlights: Option<ConfigHighlights>,
+    pub highlights: Option<ConfigHighlights<'a>>,
     pub diagnostics: DiagnosticsConfig,
 }
 
-impl Default for OneDarkConfig {
+impl Default for OneDarkConfig<'_> {
     fn default() -> Self {
         OneDarkConfig {
             toggle_style_list: OneDarkStyle::all_styles(),
@@ -117,7 +117,7 @@ impl Default for OneDarkConfig {
     }
 }
 
-impl FromObject for OneDarkConfig {
+impl FromObject for OneDarkConfig<'_> {
     fn from_object(obj: Object) -> Result<Self, ConversionError> {
         Ok(Self::deserialize(Deserializer::new(obj))?)
     }

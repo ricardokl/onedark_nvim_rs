@@ -1,6 +1,9 @@
 //use once_cell::sync::Lazy;
 //use regex::Regex;
 
+use crate::palette::Color;
+use std::borrow::Cow;
+
 // Default background and foreground colors
 const DEFAULT_BG: &str = "#000000";
 //const DEFAULT_FG: &str = "#ffffff";
@@ -9,7 +12,7 @@ const DEFAULT_BG: &str = "#000000";
 //static HEX_REGEX: Lazy<Regex> =
 //    Lazy::new(|| Regex::new(r"^#([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})$").unwrap());
 
-fn hex_to_rgb(hex_str: crate::palette::Color) -> [u8; 3] {
+fn hex_to_rgb<'a>(hex_str: &Cow<'a, Color>) -> [u8; 3] {
     let hex_str = hex_str.as_str();
     // Safety: Color was already parsed to contain valid chars
     let r = u8::from_str_radix(&hex_str[1..2], 16).unwrap();
@@ -19,13 +22,9 @@ fn hex_to_rgb(hex_str: crate::palette::Color) -> [u8; 3] {
     [r, g, b]
 }
 
-fn blend<'a>(
-    fg: crate::palette::Color,
-    bg: crate::palette::Color,
-    alpha: f32,
-) -> crate::palette::Color {
+fn blend<'a>(fg: &Cow<'a, Color>, bg: Cow<'a, Color>, alpha: f32) -> Cow<'a, Color> {
     let fg_rgb = hex_to_rgb(fg);
-    let bg_rgb = hex_to_rgb(bg);
+    let bg_rgb = hex_to_rgb(&bg);
 
     let blend_channel = |i: usize| -> u8 {
         let ret = (alpha * fg_rgb[i] as f32) + ((1.0 - alpha) * bg_rgb[i] as f32);
@@ -40,15 +39,16 @@ fn blend<'a>(
     );
 
     // Transformation from rgb coming from a hex, should be safe
-    crate::palette::Color::parse(&result).unwrap()
+    // Owned since values are created in the function
+    Cow::Owned(Color::parse(&result).unwrap())
 }
 
-pub fn darken(
-    hex: crate::palette::Color,
-    amount: f32,
-    bg: Option<crate::palette::Color>,
-) -> crate::palette::Color {
-    let bg = bg.unwrap_or(crate::palette::Color::parse(DEFAULT_BG).unwrap());
+pub fn darken<'a>(
+    hex: &Cow<'a, Color>,
+    amount: &f32,
+    bg: Option<Cow<'a, Color>>,
+) -> Cow<'a, Color> {
+    let bg = bg.unwrap_or(Cow::Owned(Color::parse(DEFAULT_BG).unwrap()));
     blend(hex, bg, amount.abs())
 }
 
