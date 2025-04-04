@@ -42,7 +42,7 @@ impl Color {
             return Err("Must be # followed by 6 hex digits");
         }
         let hex = s.as_bytes();
-        if !hex.iter().all(u8::is_ascii_hexdigit) {
+        if !hex.iter().skip(1).all(u8::is_ascii_hexdigit) {
             return Err("Invalid hex characters");
         }
         let mut arr = [0; 7];

@@ -1,4 +1,7 @@
-use nvim_oxi::{api, api::Error::Other, Result};
+use nvim_oxi::{
+    api::{self, Error::Other},
+    Result,
+};
 
 use crate::{
     palette::{merge_palletes, ColorPalette},
@@ -8,6 +11,7 @@ use crate::{
 pub fn setup() -> Result<()> {
     let c: ColorPalette = merge_palletes();
     let set_term_colors;
+
     {
         set_term_colors = GLOBAL_CONFIG
             .read()
