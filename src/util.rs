@@ -1,6 +1,7 @@
 //use once_cell::sync::Lazy;
 //use regex::Regex;
 
+use crate::highlights::IntoOptionColor;
 use crate::palette::Color;
 use std::borrow::Cow;
 
@@ -22,7 +23,7 @@ fn hex_to_rgb<'a>(hex_str: &Cow<'a, Color>) -> [u8; 3] {
     [r, g, b]
 }
 
-fn blend<'a>(fg: &Cow<'a, Color>, bg: Cow<'a, Color>, alpha: f32) -> Cow<'a, Color> {
+fn blend<'a>(fg: &Cow<'a, Color>, bg: &Cow<'a, Color>, alpha: f32) -> Cow<'a, Color> {
     let fg_rgb = hex_to_rgb(fg);
     let bg_rgb = hex_to_rgb(&bg);
 
@@ -43,13 +44,15 @@ fn blend<'a>(fg: &Cow<'a, Color>, bg: Cow<'a, Color>, alpha: f32) -> Cow<'a, Col
     Cow::Owned(Color::parse(&result).unwrap())
 }
 
-pub fn darken<'a>(
-    hex: &Cow<'a, Color>,
+pub fn darken<'a, T: Into<Cow<'a, Color>>, U: IntoOptionColor<'a>>(
+    hex: T,
     amount: &f32,
-    bg: Option<Cow<'a, Color>>,
+    bg: U,
 ) -> Cow<'a, Color> {
-    let bg = bg.unwrap_or(Cow::Owned(Color::parse(DEFAULT_BG).unwrap()));
-    blend(hex, bg, amount.abs())
+    let bg = bg
+        .into_option_color()
+        .unwrap_or(Cow::Owned(Color::parse(DEFAULT_BG).unwrap()));
+    blend(&hex.into(), &bg, amount.abs())
 }
 
 //#[allow(dead_code)]
