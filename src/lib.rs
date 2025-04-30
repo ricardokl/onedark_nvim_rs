@@ -1,10 +1,9 @@
-use nvim_oxi::{
-    api::{self, err_writeln, opts::SetKeymapOpts, types::Mode, Error::Other},
-    conversion::FromObject,
-    Dictionary, Function, Object,
-};
+use error::OneDarkError;
+use mlua::prelude::*;
+use nvim_oxi::api::{self, opts::SetKeymapOpts, types::Mode};
 
 mod config;
+mod error;
 mod highlights;
 mod palette;
 mod terminal;
@@ -12,9 +11,9 @@ mod util;
 
 use crate::config::{OneDarkConfig, OneDarkStyle, GLOBAL_CONFIG};
 
-pub fn toggle_fn() -> nvim_oxi::Result<()> {
+pub fn toggle_fn(_: &Lua, _: ()) -> LuaResult<()> {
     {
-        let mut config = GLOBAL_CONFIG.write().map_err(|e| Other(format!("{}", e)))?;
+        let mut config = GLOBAL_CONFIG.write().map_err(Into::<OneDarkError>::into)?;
         config.toggle_style_index =
             (config.toggle_style_index + 1) % config.toggle_style_list.len() as u8;
         config.style = config.toggle_style_list[config.toggle_style_index as usize];
@@ -22,30 +21,32 @@ pub fn toggle_fn() -> nvim_oxi::Result<()> {
             &format!("New coloscheme style: {:?}", config.style),
             api::types::LogLevel::Info,
             &Default::default(),
-        )?;
+        )
+        .map_err(Into::<OneDarkError>::into)?;
         if config.style == OneDarkStyle::Light {
-            api::set_option_value("background", "light", &Default::default())?;
+            api::set_option_value("background", "light", &Default::default())
+                .map_err(Into::<OneDarkError>::into)?;
         } else {
-            api::set_option_value("background", "dark", &Default::default())?;
+            api::set_option_value("background", "dark", &Default::default())
+                .map_err(Into::<OneDarkError>::into)?;
         };
     }
 
-    crate::colorscheme_fn()?;
+    // crate::colorscheme_fn(&Lua::new())?;
     Ok(())
 }
 
-pub fn setup_fn(opts: Option<Object>) -> nvim_oxi::Result<()> {
+pub fn setup_fn(_: &Lua, opts: Option<OneDarkConfig<'static>>) -> LuaResult<()> {
     {
         if let Some(obj) = opts {
-            *GLOBAL_CONFIG.write().map_err(|e| Other(format!("{}", e)))? =
-                OneDarkConfig::from_object(obj)?;
+            *GLOBAL_CONFIG.write().map_err(Into::<OneDarkError>::into)? = obj.clone();
         }
     }
 
     {
         if let Some(key) = &GLOBAL_CONFIG
             .read()
-            .map_err(|e| Other(format!("{}", e)))?
+            .map_err(Into::<OneDarkError>::into)?
             .toggle_style_key
         {
             api::set_keymap(
@@ -53,59 +54,37 @@ pub fn setup_fn(opts: Option<Object>) -> nvim_oxi::Result<()> {
                 key,
                 "<cmd>lua require(\"onedark_nvim_rs\").toggle()<cr>",
                 &SetKeymapOpts::builder().silent(true).noremap(true).build(),
-            )?;
+            )
+            .map_err(Into::<OneDarkError>::into)?;
         }
     }
 
     Ok(())
 }
 
-pub fn colorscheme_fn() -> nvim_oxi::Result<()> {
-    api::command("hi clear")?;
+pub fn colorscheme_fn(_: &Lua, _: ()) -> LuaResult<()> {
+    api::command("hi clear").map_err(Into::<OneDarkError>::into)?;
 
-    if api::get_var::<u8>("syntax_on")? == 1 {
-        api::command("syntax reset")?;
+    if api::get_var::<u8>("syntax_on").map_err(Into::<OneDarkError>::into)? == 1 {
+        api::command("syntax reset").map_err(Into::<OneDarkError>::into)?;
     }
 
-    api::set_option_value("termguicolors", true, &Default::default())?;
-    api::set_var("colors_name", "onedark_nvim_rs")?;
+    api::set_option_value("termguicolors", true, &Default::default())
+        .map_err(Into::<OneDarkError>::into)?;
+    api::set_var("colors_name", "onedark_nvim_rs").map_err(Into::<OneDarkError>::into)?;
 
     // Call setup functions from other modules
-    crate::highlights::setup()?;
-    crate::terminal::setup()?;
+    crate::highlights::setup().map_err(Into::<OneDarkError>::into)?;
+    crate::terminal::setup().map_err(Into::<OneDarkError>::into)?;
     Ok(())
 }
 
-#[nvim_oxi::plugin]
-fn onedark_nvim_rs() -> Dictionary {
-    let colorscheme: Function<(), ()> = Function::from_fn(|()| match colorscheme_fn() {
-        Ok(_) => {}
-        Err(e) => api::err_writeln(&format!("{}", e)),
-    });
-
-    let toggle: Function<(), ()> = Function::from_fn(|()| match toggle_fn() {
-        Ok(_) => {}
-        Err(e) => api::err_writeln(&format!("{}", e)),
-    });
-
-    let setup: Function<Option<Object>, ()> =
-        Function::from(|opts: Option<Object>| match setup_fn(opts) {
-            Ok(_) => {}
-            Err(e) => api::err_writeln(&format!("{}", e)),
-        });
-
-    let load: Function<(), ()> = Function::from_fn(|_| {
-        match colorscheme_fn() {
-            Ok(_) => {}
-            Err(e) => err_writeln(&format!("{}", e)),
-        };
-    });
-
-    // Return the plugin API
-    Dictionary::from_iter::<[(&str, Object); 4]>([
-        ("colorscheme", colorscheme.into()),
-        ("toggle", toggle.into()),
-        ("setup", setup.into()),
-        ("load", load.into()),
-    ])
+#[mlua::lua_module]
+fn onedark_nvim_rs(lua: &Lua) -> LuaResult<LuaTable> {
+    let exports = lua.create_table()?;
+    exports.set("setup", lua.create_function(setup_fn)?)?;
+    exports.set("colorscheme", lua.create_function(colorscheme_fn)?)?;
+    exports.set("toggle", lua.create_function(toggle_fn)?)?;
+    exports.set("load", lua.create_function(setup_fn)?)?;
+    Ok(exports)
 }

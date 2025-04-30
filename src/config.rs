@@ -1,11 +1,7 @@
 use crate::highlights::ConfigHighlights;
 use crate::highlights::FmtType;
 use crate::palette::ConfigColorPalette;
-use nvim_oxi::{
-    conversion::{Error as ConversionError, FromObject},
-    serde::Deserializer,
-    Object,
-};
+use mlua::{FromLua, Lua, LuaSerdeExt, Result, Value};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::sync::RwLock;
@@ -117,8 +113,9 @@ impl Default for OneDarkConfig<'_> {
     }
 }
 
-impl FromObject for OneDarkConfig<'_> {
-    fn from_object(obj: Object) -> Result<Self, ConversionError> {
-        Ok(Self::deserialize(Deserializer::new(obj))?)
+impl FromLua for OneDarkConfig<'_> {
+    fn from_lua(value: Value, lua: &Lua) -> Result<Self> {
+        let config: Self = lua.from_value(value)?;
+        Ok(config)
     }
 }
