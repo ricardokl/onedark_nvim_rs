@@ -62,7 +62,7 @@ pub fn setup_fn(_: &Lua, opts: Option<OneDarkConfig<'static>>) -> LuaResult<()> 
     Ok(())
 }
 
-pub fn colorscheme_fn(_: &Lua, _: ()) -> LuaResult<()> {
+pub fn colorscheme_fn(_: &Lua, _: ()) -> Result<(), LuaError> {
     api::command("hi clear").map_err(Into::<OneDarkError>::into)?;
 
     if api::get_var::<u8>("syntax_on").map_err(Into::<OneDarkError>::into)? == 1 {
